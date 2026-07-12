@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { BookOpen, Users, Calendar, ArrowRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
@@ -147,10 +148,12 @@ export default function MapelPage() {
             </div>
 
             {/* Detail Button */}
-            <button className="w-full py-2.5 px-4 rounded-xl border border-blue-200 text-[#2563eb] hover:bg-blue-50/50 font-bold text-xs flex items-center justify-center gap-1.5 transition-all">
-              Lihat Mata Pelajaran
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            <Link href="/dashboard/mapel/detail" className="w-full">
+              <button className="w-full py-2.5 px-4 rounded-xl border border-blue-200 text-[#2563eb] hover:bg-blue-50/50 font-bold text-xs flex items-center justify-center gap-1.5 transition-all">
+                Lihat Mata Pelajaran
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </Link>
           </div>
         ))}
       </div>

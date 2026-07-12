@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import {
   BookOpen,
   Users,
@@ -292,9 +293,11 @@ export default function KelasPage() {
 
               {/* Actions Footer */}
               <div className="flex justify-between items-center border-t border-slate-100/80 pt-4 mt-2">
-                <button className="text-xs font-bold text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-4 py-2 hover:bg-slate-50 transition-all">
-                  Detail Kelas
-                </button>
+                <Link href="/dashboard/kelas/detail">
+                  <button className="text-xs font-bold text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-4 py-2 hover:bg-slate-50 transition-all">
+                    Detail Kelas
+                  </button>
+                </Link>
                 <div className="flex items-center gap-2">
                   <button className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg border border-slate-100 transition-all">
                     <Pencil className="w-4 h-4" />

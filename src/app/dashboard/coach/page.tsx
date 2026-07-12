@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import {
   Users,
   CheckCircle,
@@ -142,10 +143,12 @@ export default function CoachPage() {
         </div>
 
         {/* Add Coach Button */}
-        <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-semibold text-xs shadow-sm">
-          <Plus className="w-4 h-4" />
-          Tambah Coach Baru
-        </Button>
+        <Link href="/dashboard/coach/tambah">
+          <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-semibold text-xs shadow-sm">
+            <Plus className="w-4 h-4" />
+            Tambah Coach Baru
+          </Button>
+        </Link>
       </div>
 
       {/* KPI Cards Grid */}
@@ -238,7 +241,9 @@ export default function CoachPage() {
                       {coach.initials}
                     </div>
                     <div className="flex flex-col">
-                      <span className="font-bold text-slate-800">{coach.name}</span>
+                      <Link href="/dashboard/coach/profile" className="font-bold text-slate-800 hover:text-[#2563eb] transition-all">
+                        {coach.name}
+                      </Link>
                       <span className="text-[10px] text-slate-400 mt-0.5">{coach.email}</span>
                     </div>
                   </td>
@@ -282,12 +287,12 @@ export default function CoachPage() {
                   {/* Actions */}
                   <td className="py-4 px-6 text-center">
                     <div className="flex items-center justify-center gap-3">
-                      <button className="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition-all">
+                      <Link href="/dashboard/coach/profile" className="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition-all">
                         <Eye className="w-4 h-4" />
-                      </button>
-                      <button className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all">
+                      </Link>
+                      <Link href="/dashboard/coach/edit" className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all">
                         <Pencil className="w-4 h-4" />
-                      </button>
+                      </Link>
                       <button className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all">
                         <Trash2 className="w-4 h-4" />
                       </button>

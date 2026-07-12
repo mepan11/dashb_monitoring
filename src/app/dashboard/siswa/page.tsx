@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import {
   Users,
   UserPlus,
@@ -94,10 +95,12 @@ export default function SiswaPage() {
         </div>
 
         {/* Add Student Button */}
-        <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]">
-          <UserPlus className="w-4 h-4" />
-          Tambah Siswa
-        </Button>
+        <Link href="/dashboard/siswa/tambah">
+          <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]">
+            <UserPlus className="w-4 h-4" />
+            Tambah Siswa
+          </Button>
+        </Link>
       </div>
 
       {/* Top Filter & Card Layout */}
@@ -180,7 +183,9 @@ export default function SiswaPage() {
                       {student.initials}
                     </div>
                     <div className="flex flex-col">
-                      <span className="font-bold text-slate-800">{student.name}</span>
+                      <Link href="/dashboard/siswa/profile" className="font-bold text-slate-800 hover:text-[#2563eb] transition-all">
+                        {student.name}
+                      </Link>
                       <span className="text-[10px] text-slate-400 mt-0.5">{student.genderText}</span>
                     </div>
                   </td>
@@ -213,12 +218,12 @@ export default function SiswaPage() {
                   {/* Actions */}
                   <td className="py-4 px-6 text-center">
                     <div className="flex items-center justify-center gap-3">
-                      <button className="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition-all">
+                      <Link href="/dashboard/siswa/profile" className="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition-all">
                         <Eye className="w-4 h-4" />
-                      </button>
-                      <button className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all">
+                      </Link>
+                      <Link href="/dashboard/siswa/edit" className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all">
                         <Pencil className="w-4 h-4" />
-                      </button>
+                      </Link>
                       <button className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all">
                         <Trash2 className="w-4 h-4" />
                       </button>

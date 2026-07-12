@@ -642,6 +642,536 @@ Formulir bagi Admin untuk memperbarui informasi data kepegawaian guru yang telah
     }
     ```
 
+---
+
+## 16. Fitur Profil Coach (Coach Profile)
+
+Halaman untuk melihat informasi data diri, bidang spesialisasi ekstrakurikuler yang diampu, hari dan lokasi latihan, serta ringkasan penilaian metrik kinerja coach secara individu.
+
+### Elemen UI & Kegunaan
+- **Kartu Profil Utama (Kiri)**:
+  - Avatar inisial dengan badge overlay status `Aktif`.
+  - Detail Coach (Nama lengkap, ID Number, tombol `Edit Profil`, dan `Hapus`).
+  - Informasi kontak: Email, Nomor Telepon, tanggal Bergabung Sejak, dan Alamat lengkap.
+- **Kartu Spesialisasi Utama (Kanan Atas)**:
+  - Kartu solid emerald green yang menunjukkan bidang spesialisasi yang diampu (contoh: Robotik & Coding) beserta jumlah siswa binaan (20 siswa) dan tautan pintas `Lihat Program`.
+- **Kartu Jadwal & Lokasi Latihan (Kanan Bawah)**:
+  - **Hari Latihan**: Daftar hari jadwal pelatihan (Selasa, Kamis) dengan tautan detail.
+  - **Lokasi Latihan**: Tempat latihan diselenggarakan (Lab Komputer 2, Ruang Robotik).
+- **Panel Ringkasan Kinerja Latihan (Bawah)**:
+  - **Tingkat Kehadiran**: Metrik persentase kehadiran mengajar coach (96.5%) lengkap dengan bar progres hijau.
+  - **Kepuasan Siswa**: Rata-rata penilaian umpan balik kepuasan siswa (4.8 / 5.0) lengkap dengan bar progres biru.
+  - **Tambah Widget Analisis**: Dotted card untuk konfigurasi penambahan visualisasi metrik baru.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Get Coach Profile Details**:
+  - **Endpoint**: `/api/coaches/:id`
+  - **Method**: `GET`
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "data": {
+        "id": "1",
+        "name": "Ahmad Subardjo",
+        "id_number": "LC-2024-001",
+        "email": "ahmad.s@lumina.sch.id",
+        "phone": "+62 812-3456-7890",
+        "join_date": "2024-02-12T00:00:00Z",
+        "address": "Jl. Flamboyan No. 12, Jakarta Selatan",
+        "specialization": "Robotik & Coding",
+        "students_count": 20,
+        "schedule_days": ["Selasa", "Kamis"],
+        "locations": ["Lab Komputer 2", "Ruang Robotik"],
+        "performance": {
+          "attendance_rate": 96.5,
+          "satisfaction_rate": 4.8
+        }
+      }
+    }
+    ```
+
+---
+
+## 17. Fitur Tambah Coach Baru (Add New Coach Form)
+
+Formulir bagi Admin untuk menambahkan coach/pelatih baru ke dalam sistem dengan menginput biodata pribadi, informasi kontak, mengunggah foto profil, serta mengatur spesialisasi & program ekstrakurikuler yang diampu.
+
+### Elemen UI & Kegunaan
+- **Form Kiri**:
+  - **Biodata Pribadi**: Form input Nama Lengkap, ID Number/NIK (16 digit), Jenis Kelamin (dropdown L/P), Tempat Lahir, Tanggal Lahir (kalender), dan Alamat domisili saat ini (textarea).
+  - **Informasi Kontak**: Form input Alamat Email dan Nomor Telepon/WhatsApp (dilengkapi prefix +62 static).
+  - **Penugasan Coach**: Dropdown Spesialisasi (Sains, Olahraga, Seni) dan input teks Bidang Ekskul yang Diampu.
+- **Panel Kanan (Media & Status)**:
+  - **Foto Profil Coach**: Area avatar dengan tombol `Pilih File Foto` untuk memilih berkas format .jpg/.png maksimal 2MB, dilengkapi dengan petunjuk tips unggahan yang baik.
+  - **Status Pendaftaran**: Status kemajuan kelengkapan form input (persentase kelengkapan data, contoh: 45%) yang dilengkapi dengan indikator checklist interaktif.
+- **Aksi Footer**: Tombol `Batalkan` (kembali ke coach) dan `Simpan Data Coach`.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Create New Coach**:
+  - **Endpoint**: `/api/coaches`
+  - **Method**: `POST`
+  - **Request Body (Multipart Form-Data)**:
+    - `name` (String)
+    - `nik` (String)
+    - `gender` (Enum: `L`, `P`)
+    - `birth_place` (String)
+    - `birth_date` (String/Date)
+    - `address` (String)
+    - `email` (String)
+    - `phone` (String)
+    - `specialization` (String)
+    - `ekskul_field` (String)
+    - `profile_photo` (Binary/File)
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "message": "Data coach berhasil didaftarkan",
+      "coach_id": "cch_02"
+    }
+    ```
+
+---
+
+## 18. Fitur Edit Data Coach (Edit Coach Form)
+
+Formulir bagi Admin untuk memperbarui informasi data kepegawaian coach yang telah terdaftar di sistem.
+
+### Elemen UI & Kegunaan
+- **Header & Action**:
+  - Judul `Edit Data Coach` dan tombol `Batalkan` (kembali ke profil) serta `Simpan Perubahan`.
+- **Form Pengeditan**:
+  - Sama dengan Form Tambah Coach, namun seluruh field data (Biodata Pribadi, Informasi Kontak, Penugasan Coach, dan Foto Profil) telah **diisi secara otomatis (pre-filled)** dengan data coach Ahmad Subardjo.
+  - Penunjuk kemajuan kelengkapan form menampilkan `100%` dengan status indikator checklist langkah semuanya bertanda centang hijau.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Update Coach Data**:
+  - **Endpoint**: `/api/coaches/:id`
+  - **Method**: `PUT` or `PATCH`
+  - **Request Body (Multipart Form-Data)**:
+    - field biodata, kontak, penugasan, dan foto profil.
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "message": "Perubahan data coach berhasil disimpan"
+    }
+    ```
+
+---
+
+## 19. Fitur Profil Siswa (Student Profile)
+
+Halaman untuk melihat informasi data pribadi siswa, status penugasan akademik kelas, riwayat persentase kehadiran sekolah, serta rangkuman pencapaian nilai mata pelajaran.
+
+### Elemen UI & Kegunaan
+- **Overview Card (Atas)**:
+  - Foto profil siswa dengan tombol kamera overlay.
+  - Detail Siswa (Nama: Aris Setiawan, NISN: 0098223145, Badge Status Aktif, dan Periode Akademik).
+  - Tombol aksi `Hapus`, `Cetak` data laporan, dan `Edit Profil`.
+- **Informasi Pribadi (Kiri)**:
+  - Biodata personal siswa: Tempat & Tanggal Lahir, Jenis Kelamin, Alamat Domisili KTP, Nama Wali, dan Kontak Wali.
+- **Akademik Card (Kanan)**:
+  - Kartu solid blue memuat data Kelas Saat Ini (Kelas 5-B), Nama Wali Kelas (Ibu Sarah Wijaya, M.Pd), serta tombol pintas `Lihat Jadwal Kelas`.
+- **Kehadiran Card (Bawah Kiri)**:
+  - Penunjuk persentase tingkat kehadiran sekolah (95%) menggunakan visualisasi cincin kemajuan melingkar (*circular progress ring*).
+- **Rangkuman Nilai (Bawah Kanan)**:
+  - Daftar nilai pencapaian siswa per subjek (Matematika: 92, Bahasa Indonesia: 85, IPA: 89) lengkap dengan bilah kemajuan hijau dan penunjuk rata-rata kelas.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Get Student Profile Details**:
+  - **Endpoint**: `/api/students/:id`
+  - **Method**: `GET`
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "data": {
+        "id": "1",
+        "name": "Aris Setiawan",
+        "nisn": "0098223145",
+        "gender": "Laki-laki",
+        "birth_details": "Jakarta, 14 Mei 2012",
+        "address": "Jl. Mawar Melati No. 45, Kebayoran Baru, Jakarta Selatan",
+        "guardian_name": "Bp. Hendra Setiawan",
+        "guardian_phone": "+62 812-3456-7890",
+        "academic": {
+          "current_class": "Kelas 5-B",
+          "homeroom_teacher": "Ibu Sarah Wijaya, M.Pd"
+        },
+        "attendance_rate": 95,
+        "grades": [
+          { "subject": "Matematika", "score": 92 },
+          { "subject": "Bahasa Indonesia", "score": 85 },
+          { "subject": "Ilmu Pengetahuan Alam", "score": 89 }
+        ],
+        "grades_average": 88.5
+      }
+    }
+    ```
+
+---
+
+## 20. Fitur Tambah Siswa Baru (Add New Student Form)
+
+Formulir bagi Admin untuk menambahkan siswa baru ke dalam sistem, mengatur kontak wali murid, memplot penempatan akademik, serta melengkapi foto profil.
+
+### Elemen UI & Kegunaan
+- **Form Kiri (3 Langkah Form)**:
+  - **1. Biodata Pribadi**: Input Nama Lengkap Siswa, NISN (10 digit), Jenis Kelamin (dropdown L/P), Tempat Lahir, Tanggal Lahir (kalender), dan Alamat domisili tempat tinggal (textarea).
+  - **2. Informasi Kontak Orang Tua**: Input Email Orang Tua / Wali (dengan ikon surat) dan Nomor Telepon/WA (dengan ikon telepon).
+  - **3. Penempatan Akademik**: Dropdown Tingkat Kelas (Kelas 1-6) dan Kelompok Belajar/Section (A-C).
+- **Panel Kanan (Media & Status)**:
+  - **Foto Profil Siswa**: Area lingkaran avatar dengan tombol kamera overlay biru dan tombol aksi `Pilih Foto` untuk memilih berkas format .jpg/.png maksimal 2MB.
+  - **Progres Pendaftaran**: Status kemajuan kelengkapan form input (persentase kelengkapan data, contoh: 75%) yang dilengkapi dengan indikator checklist interaktif.
+  - **Tips Admin**: Kotak bantuan biru berisi peringatan validasi NISN dengan database Dapodik nasional untuk menghindari duplikasi.
+- **Aksi Header**: Tombol `Batalkan` (kembali ke daftar siswa) dan `Simpan Data Siswa`.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Create New Student**:
+  - **Endpoint**: `/api/students`
+  - **Method**: `POST`
+  - **Request Body (Multipart Form-Data)**:
+    - `name` (String)
+    - `nisn` (String)
+    - `gender` (Enum: `L`, `P`)
+    - `birth_place` (String)
+    - `birth_date` (String/Date)
+    - `address` (String)
+    - `parent_email` (String)
+    - `parent_phone` (String)
+    - `grade_level` (String)
+    - `section` (String)
+    - `profile_photo` (Binary/File)
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "message": "Data siswa berhasil didaftarkan",
+      "student_id": "std_02"
+    }
+    ```
+
+---
+
+## 21. Fitur Edit Data Siswa (Edit Student Form)
+
+Formulir bagi Admin untuk memperbarui informasi data akademik, data pribadi, dan data wali siswa yang telah terdaftar di sistem.
+
+### Elemen UI & Kegunaan
+- **Header & Action**:
+  - Judul `Edit Data Siswa` dan tombol `Batalkan` (kembali ke profil) serta `Simpan Perubahan`.
+- **Form Pengeditan**:
+  - Sama dengan Form Tambah Siswa, namun seluruh field data (Biodata Pribadi, Informasi Kontak, Penempatan Akademik, dan Foto Profil) telah **diisi secara otomatis (pre-filled)** dengan data profil Aris Setiawan.
+  - Penunjuk kemajuan kelengkapan form menampilkan `100%` dengan status indikator checklist langkah semuanya bertanda centang hijau.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Update Student Data**:
+  - **Endpoint**: `/api/students/:id`
+  - **Method**: `PUT` or `PATCH`
+  - **Request Body (Multipart Form-Data)**:
+    - field biodata, kontak, akademik, dan foto profil.
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "message": "Perubahan data siswa berhasil disimpan"
+    }
+    ```
+
+---
+
+## 22. Fitur Detail Kelas (Class Details View)
+
+Halaman untuk melihat statistik komprehensif dari suatu kelas spesifik beserta daftar nama siswa yang terdaftar di kelas tersebut.
+
+### Elemen UI & Kegunaan
+- **Header & Subtitle**:
+  - Judul kelas (contoh: Kelas 4-C) dan Nama Wali Kelas (Ibu Sarah Wijaya, S.Pd.).
+  - Tombol aksi `Export Data` laporan kelas dan `+ Tambah Siswa`.
+- **KPI Summary Cards (Top)**:
+  - **Total Siswa**: Jumlah siswa terdaftar (32) beserta tren semester.
+  - **Laki-laki**: Jumlah siswa laki-laki (14).
+  - **Perempuan**: Jumlah siswa perempuan (18).
+  - **Kehadiran Hari Ini**: Persentase kehadiran rata-hari siswa hari ini (98%).
+- **Daftar Siswa Card**:
+  - Menampilkan daftar nama siswa dalam format tabel:
+    - Kolom: Photo avatar, Nama Lengkap (dan nomor urut absen), NISN, Gender badge (orange untuk laki-laki, hijau untuk perempuan), Status aktif (dot hijau), dan tombol aksi 3-titik.
+    - Selektor filter gender dan status keaktifan di bagian atas tabel.
+    - Pagination footer di bagian bawah tabel.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Get Class Details**:
+  - **Endpoint**: `/api/classes/:id`
+  - **Method**: `GET`
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "data": {
+        "class_id": "1",
+        "class_name": "Kelas 4-C",
+        "homeroom_teacher": "Ibu Sarah Wijaya, S.Pd.",
+        "stats": {
+          "total_students": 32,
+          "male_count": 14,
+          "female_count": 18,
+          "attendance_today": 98
+        },
+        "students": [
+          {
+            "id": "1",
+            "name": "Aditya Pratama",
+            "absen_number": "01",
+            "nisn": "0123456789",
+            "gender": "Laki-laki",
+            "status": "Aktif"
+          }
+        ]
+      }
+    }
+    ```
+
+---
+
+## 23. Fitur Detail Daftar Mata Pelajaran Kelas (Class Subjects List View)
+
+Halaman untuk melihat dan mengelola kurikulum pembagian tugas mengajar beserta alokasi jadwal mata pelajaran untuk kelas spesifik.
+
+### Elemen UI & Kegunaan
+- **Breadcrumbs & Header**:
+  - Breadcrumb: `Dashboard > Mata Pelajaran > Daftar Mata Pelajaran (Kelas 4-C)`.
+  - Judul halaman `Daftar Mata Pelajaran - Kelas 4-C` dan deskripsi singkat.
+  - Tombol aksi `+ Tambah Mata Pelajaran`.
+- **KPI Summary Cards (Top)**:
+  - **Total Mata Pelajaran**: Jumlah total mata pelajaran terdaftar (12).
+  - **Mata Pelajaran Akademik**: Jumlah mata pelajaran kategori akademik (8).
+  - **Non-Akademik / Ekskul**: Jumlah mata pelajaran kategori non-akademik/ekstrakurikuler (4).
+- **Daftar Mata Pelajaran Card**:
+  - Menampilkan daftar nama mapel dalam format tabel:
+    - Kolom: Mata Pelajaran (nama & ikon buku), Kategori badge (`AKADEMIK`/`NON-AKADEMIK`), Guru Pengajar (avatar inisial & nama), Jadwal (Hari & Jam), Progres Silabus (persentase & bilah progress hijau), dan tombol Aksi (`Detail/Eye`, `Ubah/Pencil`, `Hapus/Trash`).
+    - Input kolom pencarian dan tombol sortir nama A-Z di bagian atas tabel.
+    - Pagination footer di bagian bawah tabel.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Get Class Subjects Details**:
+  - **Endpoint**: `/api/classes/:class_id/subjects`
+  - **Method**: `GET`
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "data": {
+        "class_id": "1",
+        "class_name": "Kelas 4-C",
+        "stats": {
+          "total_subjects": 12,
+          "academic_count": 8,
+          "non_academic_count": 4
+        },
+        "subjects": [
+          {
+            "id": "1",
+            "name": "Matematika",
+            "category": "AKADEMIK",
+            "teacher": "Bpk. Aris Setiawan",
+            "schedule": "Senin, 08:00 - 09:30",
+            "syllabus_progress": 75
+          }
+        ]
+      }
+    }
+    ```
+
+---
+
+## 24. Fitur Tambah Mata Pelajaran ke Kelas (Add Subject to Class Form)
+
+Formulir bagi Admin untuk menambahkan mata pelajaran baru ke kelas tertentu, menunjuk guru pengampu, serta menjadwalkan alokasi waktu mingguan.
+
+### Elemen UI & Kegunaan
+- **Form Pilihan Utama**:
+  - **Pilih Mata Pelajaran**: Dropdown pemilih mata pelajaran kurikulum (Matematika, B. Indonesia, IPA, B. Inggris, Seni, PJOK).
+  - **Pilih Guru Pengajar**: Dropdown pemilih guru pengampu yang terdaftar di sekolah.
+- **Pengaturan Jadwal Mingguan**:
+  - **Pilih Hari**: Pills selektor multi-hari interaktif (Senin-Sabtu) untuk menandai jadwal masuk.
+  - **Waktu Mulai & Selesai**: Input teks/jam (dengan ikon jam pada sisi kanan) untuk menginput detail jam alokasi belajar.
+- **Info/Tip Box (Bawah)**:
+  - Alert box berwarna hijau menginformasikan integrasi otomatis mata pelajaran ke laporan capaian belajar dan absensi kelas 4-C.
+- **Aksi Footer**: Tombol link teks `Batalkan` (kembali ke detail kurikulum kelas) dan tombol solid `+ Tambah ke Kurikulum`.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Assign Subject to Class**:
+  - **Endpoint**: `/api/classes/:class_id/subjects`
+  - **Method**: `POST`
+  - **Request Body (JSON)**:
+    ```json
+    {
+      "subject_id": "math_01",
+      "teacher_id": "tchr_01",
+      "days": ["Senin", "Rabu"],
+      "start_time": "08:00",
+      "end_time": "09:30"
+    }
+    ```
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "message": "Mata pelajaran berhasil ditambahkan ke kelas 4-C"
+    }
+    ```
+
+---
+
+## 25. Fitur Edit Mata Pelajaran (Edit Subject Form)
+
+Formulir bagi Admin untuk memperbarui data alokasi kurikulum pengajaran, penugasan guru pengampu, serta waktu jadwal masuk mingguan untuk mata pelajaran yang telah terdaftar di kelas.
+
+### Elemen UI & Kegunaan
+- **Header & Action**:
+  - Judul `Edit Mata Pelajaran` dan tombol `Batalkan` serta `Simpan Perubahan`.
+- **Form Pengeditan**:
+  - Sama dengan Form Tambah Mata Pelajaran ke Kelas, namun seluruh field data (Mata Pelajaran: Matematika, Guru Pengajar: Bpk. Aris Setiawan, Hari: Senin & Rabu, serta jam detail alokasi waktu) telah **diisi secara otomatis (pre-filled)**.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Update Subject Assignment**:
+  - **Endpoint**: `/api/classes/:class_id/subjects/:subject_id`
+  - **Method**: `PUT` or `PATCH`
+  - **Request Body (JSON)**:
+    ```json
+    {
+      "teacher_id": "tchr_01",
+      "days": ["Senin", "Rabu"],
+      "start_time": "08:00",
+      "end_time": "09:30"
+    }
+    ```
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "message": "Detail kurikulum mata pelajaran berhasil diperbarui"
+    }
+    ```
+
+---
+
+## 26. Fitur Presensi Guru (Teacher Attendance Dashboard)
+
+Halaman monitoring tingkat kehadiran, ketepatan waktu datang, serta permohonan izin/absen bagi tenaga pengajar (guru) hari ini.
+
+### Elemen UI & Kegunaan
+- **Header & Action**:
+  - Judul `Presensi Guru` dan deskripsi pemantauan kedisiplinan guru hari ini.
+  - Selektor kalender tanggal (contoh: 10/12/2023) dan tombol `Download Rekap` rekapitulasi kehadiran.
+- **KPI Summary Cards (Top)**:
+  - **Total Guru**: Jumlah total guru terdaftar (48).
+  - **Hadir Hari Ini**: Jumlah guru yang telah presensi hadir (42).
+  - **Terlambat**: Jumlah guru yang datang terlambat (4).
+  - **Absen / Izin**: Jumlah guru yang berhalangan hadir (2).
+- **Data Kehadiran Guru Table**:
+  - Menampilkan daftar riwayat kehadiran per baris:
+    - Kolom: Nama Guru (dan NIP), Bidang Mata Pelajaran (disertai ikon kategori), Waktu Presensi datang (WIB), Status badge (`Hadir` hijau, `Terlambat` orange, `Izin` biru), dan link pintas `Detail` mengarah ke profil guru.
+    - Filter kategori mata pelajaran dan tombol penyaring status kelayakan di bagian atas tabel.
+    - Pagination footer di bagian bawah tabel.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Get Teachers Attendance**:
+  - **Endpoint**: `/api/attendance/teachers`
+  - **Method**: `GET`
+  - **Query Params**: `date` (YYYY-MM-DD), `subject` (String)
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "data": {
+        "date": "2023-12-10",
+        "stats": {
+          "total_teachers": 48,
+          "present_count": 42,
+          "late_count": 4,
+          "absent_count": 2
+        },
+        "attendance": [
+          {
+            "id": "1",
+            "teacher_name": "Siti Aminah, S.Pd.",
+            "nip": "19850312011012003",
+            "subject": "Guru Kelas 4A",
+            "check_in_time": "07:05 WIB",
+            "status": "Hadir"
+          }
+        ]
+      }
+    }
+    ```
+
+---
+
+## 27. Fitur Presensi Coach (Coach Attendance Dashboard)
+
+Halaman monitoring tingkat kehadiran, ketepatan waktu datang, serta permohonan izin/absen bagi instruktur (coach) ekstrakurikuler hari ini.
+
+### Elemen UI & Kegunaan
+- **Header & Action**:
+  - Judul `Presensi Coach` dan deskripsi pemantauan kedisiplinan coach hari ini.
+  - Selektor kalender tanggal (contoh: 07/11/2026) dan tombol `Download Rekap` rekapitulasi kehadiran.
+- **KPI Summary Cards (Top)**:
+  - **Total Coach**: Jumlah total coach terdaftar (24).
+  - **Hadir Hari Ini**: Jumlah coach yang telah presensi hadir (21).
+  - **Terlambat**: Jumlah coach yang datang terlambat (2).
+  - **Absen / Izin**: Jumlah coach yang berhalangan hadir (1).
+- **Data Kehadiran Coach Table**:
+  - Menampilkan daftar riwayat kehadiran per baris:
+    - Kolom: Nama Coach (dan ID), Bidang Ekstrakurikuler (disertai ikon kategori), Waktu Presensi datang (WIB), Status badge (`Hadir` hijau, `Terlambat` orange, `Izin` biru, `Absen` merah), dan link pintas `Detail` mengarah ke profil coach.
+    - Filter kategori ekstrakurikuler dan tombol penyaring status kelayakan di bagian atas tabel.
+    - Pagination footer di bagian bawah tabel.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Get Coaches Attendance**:
+  - **Endpoint**: `/api/attendance/coaches`
+  - **Method**: `GET`
+  - **Query Params**: `date` (YYYY-MM-DD), `extracurricular` (String)
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "data": {
+        "date": "2026-11-07",
+        "stats": {
+          "total_coaches": 24,
+          "present_count": 21,
+          "late_count": 2,
+          "absent_count": 1
+        },
+        "attendance": [
+          {
+            "id": "1",
+            "coach_name": "Agung Setiawan",
+            "coach_id": "C-0012",
+            "extracurricular": "Sepak Bola",
+            "check_in_time": "15:10 WIB",
+            "status": "Hadir"
+          }
+        ]
+      }
+    }
+    ```
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
