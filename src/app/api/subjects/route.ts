@@ -15,3 +15,33 @@ export async function GET() {
     );
   }
 }
+
+export async function POST(request: Request) {
+  try {
+    const { name, code, description } = await request.json();
+
+    if (!name || !code) {
+      return NextResponse.json(
+        { success: false, message: "Nama dan Kode mata pelajaran wajib diisi" },
+        { status: 400 }
+      );
+    }
+
+    const [result]: any = await db.query(
+      "INSERT INTO subjects (name, code, description) VALUES (?, ?, ?)",
+      [name, code, description || ""]
+    );
+
+    return NextResponse.json({
+      success: true,
+      message: "Mata pelajaran berhasil ditambahkan",
+      id: result.insertId,
+    });
+  } catch (error: any) {
+    console.error("Subjects POST Error:", error);
+    return NextResponse.json(
+      { success: false, message: "Terjadi kesalahan internal server" },
+      { status: 500 }
+    );
+  }
+}

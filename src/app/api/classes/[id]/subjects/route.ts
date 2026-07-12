@@ -40,7 +40,18 @@ export async function GET(
         ? `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase()
         : `${nameParts[0][0] || "G"}`.toUpperCase();
 
-      const days = subj.scheduleDay ? JSON.parse(subj.scheduleDay) : [];
+      let days = [];
+      try {
+        if (subj.scheduleDay) {
+          const parsed = JSON.parse(subj.scheduleDay);
+          if (Array.isArray(parsed)) {
+            days = parsed;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse scheduleDay JSON:", e);
+      }
+
       const scheduleText = days.length > 0 
         ? `${days.join(", ")} (${subj.startTime || ""} - ${subj.endTime || ""})` 
         : "Jadwal belum ditentukan";
