@@ -1160,6 +1160,292 @@ Halaman monitoring tingkat kehadiran, ketepatan waktu datang, serta permohonan i
     }
     ```
 
+---
+
+## 28. Fitur Presensi Siswa (Student Attendance Dashboard)
+
+Halaman untuk memantau detail persentase tingkat kehadiran siswa berdasarkan pengelompokan tingkat kelas (1A-6B) hari ini.
+
+### Elemen UI & Kegunaan
+- **Header & Action**:
+  - Judul `Presensi Siswa` dan subtitle `Pilih kelas untuk melihat detail kehadiran siswa.`
+  - Filter penanggalan untuk memantau data kehadiran pada tanggal lampau (contoh: 10/27/2023).
+- **KPI Summary Cards (Top)**:
+  - **Total Siswa Hadir**: Jumlah siswa yang hadir dari total keseluruhan (312/320).
+  - **Rata-rata Kehadiran**: Persentase rata-rata siswa hadir (97.5%).
+  - **Siswa Alpha Hari Ini**: Jumlah murid absen tanpa keterangan (3 siswa).
+- **Grid Kartu Kelas (12 Kelas)**:
+  - Masing-masing kartu kelas berisi: persentase kehadiran (warna hijau/orange/merah sesuai performa), nama kelas (contoh: Kelas 1A), nama wali kelas, bilah kemajuan progres hari ini, total siswa, dan tombol `Lihat Detail` yang mengarah ke Detail Kelas.
+- **Floating Button (Bawah Kanan)**:
+  - Tombol melingkar `+` (Plus) biru untuk menambahkan data absensi baru.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Get Students Attendance Summary**:
+  - **Endpoint**: `/api/attendance/students`
+  - **Method**: `GET`
+  - **Query Params**: `date` (YYYY-MM-DD)
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "data": {
+        "date": "2023-10-27",
+        "stats": {
+          "total_present": 312,
+          "total_students": 320,
+          "average_rate": 97.5,
+          "alpha_count": 3
+        },
+        "classes_attendance": [
+          {
+            "class_id": "1",
+            "class_name": "Kelas 1A",
+            "homeroom_teacher": "Bu Sarah Aminah",
+            "attendance_rate": 98,
+            "students_count": 28
+          }
+        ]
+      }
+    }
+    ```
+
+---
+
+## 29. Fitur Input & Lihat Nilai Siswa Kelas (Class Grades View)
+
+Halaman untuk melihat, mengedit, dan mengekspor daftar perolehan nilai akademik harian, UTS, UAS, serta nilai ekstrakurikuler murid pada kelas tertentu.
+
+### Elemen UI & Kegunaan
+- **Header & Action**:
+  - Judul `Input Nilai: Kelas 4-C` dan keterangan metode penginputan.
+  - Tombol aksi `Upload Nilai Tugas (Excel)` untuk bulk import dan `Download Rekap Nilai` untuk ekspor nilai.
+- **KPI Summary Cards (Top)**:
+  - **Tahun Akademik**: Periode tahun ajaran (2023/2024).
+  - **Semester**: Keterangan semester berjalan (Ganjil).
+  - **Total Siswa**: Jumlah siswa terdaftar di kelas (32).
+  - **Di Bawah KKM**: Jumlah siswa dengan performa di bawah standar kelulusan KKM (4).
+- **Daftar Nilai Siswa Table**:
+  - Menampilkan daftar perolehan nilai per murid:
+    - Kolom: Nomor, Nama Siswa (dan avatar inisial), NISN, Tugas Harian (disertai status update e.g. `BULK UPDATED`/`REQUIRES ACTION`), Nilai Ekstrakurikuler, UTS, UAS, Nilai Rata-rata (dengan penekanan warna biru lulus / merah remedial), serta Status kelulusan (`Lulus`/`Remedial`).
+    - Input pencarian berdasarkan nama siswa di bagian atas tabel.
+    - Pagination footer di bagian bawah tabel.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Get Class Student Grades**:
+  - **Endpoint**: `/api/classes/:class_id/grades`
+  - **Method**: `GET`
+  - **Query Params**: `search` (String)
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "data": {
+        "class_id": "1",
+        "class_name": "Kelas 4-C",
+        "academic_year": "2023/2024",
+        "semester": "Ganjil",
+        "stats": {
+          "total_students": 32,
+          "below_kkm_count": 4
+        },
+        "grades": [
+          {
+            "no": 1,
+            "student_name": "Aditya Pratama",
+            "nisn": "0123984712",
+            "daily_assignment": 85.4,
+            "daily_status": "BULK UPDATED",
+            "extracurricular": 80.0,
+            "uts": 88.0,
+            "uas": 92.0,
+            "average": 86.3,
+            "status": "Lulus"
+          }
+        ]
+      }
+    }
+    ```
+- **Upload Grades Bulk via Excel**:
+  - **Endpoint**: `/api/classes/:class_id/grades/upload`
+  - **Method**: `POST`
+  - **Request Body (Multipart Form-Data)**:
+    - `file` (Binary/Excel spreadsheet)
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "message": "Bulk upload data nilai berhasil diproses"
+    }
+    ```
+
+---
+
+## 30. Fitur Detail Ekstrakurikuler (Extracurricular Details View)
+
+Halaman untuk melihat detail struktur organisasi pelatih utama, rincian jadwal latihan mingguan, lokasi pelaksanaan, serta daftar partisipasi keikutsertaan siswa dalam suatu program ekstrakurikuler (contoh: Robotik).
+
+### Elemen UI & Kegunaan
+- **Header & Action**:
+  - Judul program (Robotik), Kategori bidang (Sains & Teknologi), dan Jumlah Siswa Terdaftar (24 siswa).
+  - Tombol aksi `Unduh Daftar Siswa` dan `+ Tambah Siswa`.
+- **Pelatih Utama Card (Kiri)**:
+  - Foto dan nama Pelatih/Coach (Rizky Kurniawan, NIK/ID Coach) dengan indikator centang hijau verifikasi.
+  - Rincian Informasi: Jadwal Latihan (Selasa & Kamis, 15:30), Lokasi Latihan (Lab Komputer & Robotik), serta email kontak pelatih utama.
+  - Tombol edit (ikon pensil) di pojok kanan atas untuk memodifikasi profil pelatih.
+- **Daftar Partisipasi Siswa Card (Kanan)**:
+  - Tabel data keanggotaan murid:
+    - Kolom: Nama Siswa (dan avatar inisial), Kelas (e.g. 5-B), NISN, dan Status keaktifan (`Aktif` hijau, `Izin` amber, `Nonaktif` merah).
+    - Kolom pencarian berdasarkan nama/NISN siswa di bagian atas tabel.
+    - Pagination footer di bagian bawah tabel.
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Get Extracurricular Details**:
+  - **Endpoint**: `/api/extracurriculars/:id`
+  - **Method**: `GET`
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "data": {
+        "id": "1",
+        "title": "Robotik",
+        "category": "Sains & Teknologi",
+        "total_students": 24,
+        "coach": {
+          "name": "Rizky Kurniawan",
+          "coach_id": "#RCT-2023-042",
+          "schedule": "Selasa & Kamis, 15:30",
+          "location": "Lab Komputer & Robotik",
+          "email": "r.kurniawan@lumina.sch.id"
+        },
+        "students": [
+          {
+            "id": "1",
+            "name": "Aditya Saputra",
+            "class_name": "5-B",
+            "nisn": "0092813341",
+            "status": "Aktif"
+          }
+        ]
+      }
+    }
+    ```
+
+---
+
+## 31. Fitur Tambah Siswa ke Ekstrakurikuler (Add Student to Extracurricular Form)
+
+Formulir interaktif multi-seleksi untuk mendaftarkan satu atau beberapa siswa sekaligus ke dalam kelas program ekstrakurikuler tertentu.
+
+### Elemen UI & Kegunaan
+- **Header & Info Context**:
+  - Judul `Tambah Siswa ke Ekstrakurikuler` beserta detail level kurikulum ekskul (Robotik Dasar (Level 1)) dan tombol silang `X` untuk menutup form.
+- **Search & Filter Options**:
+  - Kolom input pencarian siswa serta sub-info sortir kelas/A-Z dan jumlah total siswa tersedia (124 Siswa Tersedia).
+- **Multi-Selection Student List (Tabel)**:
+  - Kolom: Checkbox (mendukung seleksi individual & select-all di header), Nama Siswa (dan avatar inisial), Kelas (e.g. 4-A), dan NISN.
+  - Baris siswa yang dipilih (e.g. Bagas Pratama, Citra Salsabila) menampilkan latar belakang biru transparan tipis dan checkbox tercentang.
+- **Action Footer Bar**:
+  - Informasi Ringkasan: Sisi kiri menampilkan tumpukan lingkaran avatar inisial siswa yang sedang dipilih disertai tulisan ringkasan jumlah (e.g. 2 Siswa Terpilih).
+  - Tombol aksi `Batalkan` (kembali ke rincian ekskul) dan `Tambahkan Siswa` (menyimpan alokasi pendaftaran).
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Assign Students to Extracurricular**:
+  - **Endpoint**: `/api/extracurriculars/:extracurricular_id/students`
+  - **Method**: `POST`
+  - **Request Body (JSON)**:
+    ```json
+    {
+      "student_ids": ["2", "3"]
+    }
+    ```
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "message": "2 Siswa berhasil didaftarkan ke program ekstrakurikuler Robotik"
+    }
+    ```
+
+---
+
+## 32. Fitur Pendaftaran Akun Baru (Register New Account Form)
+
+Formulir pendaftaran untuk mendaftarkan dan membuat akses akun pengguna baru ke dalam sistem aplikasi monitoring (admin, guru, coach, wali murid).
+
+### Elemen UI & Kegunaan
+- **Header & Title**:
+  - Judul `Pendaftaran Akun Baru` dan instruksi deskripsi `Lengkapi data di bawah ini untuk membuat akses pengguna baru ke sistem.`
+- **Foto Profil Uploader (Kiri)**:
+  - Lingkaran placeholder avatar default dengan label `Foto Profil` dan pembatasan `Maksimal 2MB (JPG, PNG)`.
+  - Tombol `Pilih Foto Profil` untuk memilih gambar lokal dari perangkat.
+- **Input Fields Form (Kanan)**:
+  - **Nama Lengkap**: Input teks wajib nama pengguna baru.
+  - **Email Instansi**: Input alamat surat elektronik resmi pengguna.
+  - **Pilih Role**: Pilihan opsi dropdown level otorisasi (`Administrator`, `Guru`, `Coach`, `Wali Murid`).
+  - **Password Awal**: Kolom password (min. 8 karakter) dengan tombol toggle ikon mata untuk menampilkan/menyembunyikan sandi.
+  - **Alert Banner**: Kotak pesan info biru mengenai prosedur pengiriman password awal ke email terdaftar dan kewajiban penggantian sandi pada login pertama demi alasan keamanan.
+- **Action Buttons (Bawah)**:
+  - Tombol `Batalkan` (kembali ke manajemen pengguna) dan `Simpan Akun` (mengirim data registrasi).
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Create New User Account**:
+  - **Endpoint**: `/api/users`
+  - **Method**: `POST`
+  - **Request Body (JSON / Multipart Form-data)**:
+    - `name` (String)
+    - `email` (String)
+    - `role` (String)
+    - `password` (String)
+    - `avatar` (File Binary, Optional)
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "message": "Akun baru atas nama Aditya Pratama berhasil didaftarkan"
+    }
+    ```
+
+---
+
+## 33. Fitur Ganti Password Baru (Change Password Form)
+
+Formulir pengaturan administrasi keamanan untuk mereset dan mengganti kata sandi (password) dari suatu akun pengguna (contoh: Sarah Jenkins, M.Pd).
+
+### Elemen UI & Kegunaan
+- **Header & Title**:
+  - Judul `Ganti Password Baru` dan keterangan pengguna target yang dituju (`Mengubah kata sandi untuk Sarah Jenkins, M.Pd`).
+- **Input Fields Form**:
+  - **Kata Sandi Baru**: Kolom input kata sandi baru dilengkapi dengan tombol toggle icon mata (show/hide).
+  - **Konfirmasi Kata Sandi Baru**: Kolom konformasi pencocokan kata sandi dengan tombol toggle icon mata.
+  - **Info Policy Banner**: Catatan kelayakan input sandi berupa teks `Minimal 8 karakter dengan kombinasi huruf dan angka`.
+- **Action Buttons**:
+  - Tombol `Batalkan` (berlatar belakang biru muda transparan) dan `Simpan Kata Sandi` (solid blue button).
+
+### Rancangan Integrasi Backend (Masa Depan)
+- **Change User Password**:
+  - **Endpoint**: `/api/users/:user_id/password`
+  - **Method**: `PUT`
+  - **Request Body (JSON)**:
+    ```json
+    {
+      "password": "newSecurePassword123"
+    }
+    ```
+  - **Response**:
+    ```json
+    {
+      "success": true,
+      "message": "Kata sandi untuk pengguna Sarah Jenkins berhasil diubah"
+    }
+    ```
+
+
+
+
+
+
+
 
 
 

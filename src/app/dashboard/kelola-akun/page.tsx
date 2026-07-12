@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import {
   Users,
   CheckCircle,
@@ -131,10 +132,12 @@ export default function KelolaAkunPage() {
         </div>
 
         {/* Add Account Button */}
-        <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]">
-          <UserPlus className="w-4 h-4" />
-          Tambah Akun Baru
-        </Button>
+        <Link href="/dashboard/kelola-akun/tambah">
+          <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]">
+            <UserPlus className="w-4 h-4" />
+            Tambah Akun Baru
+          </Button>
+        </Link>
       </div>
 
       {/* KPI Cards Grid */}
@@ -191,11 +194,12 @@ export default function KelolaAkunPage() {
               </div>
             </div>
 
-            {/* Actions Buttons */}
             <div className="grid grid-cols-2 gap-3 border-t border-slate-100/80 pt-4 mt-2">
-              <button className="py-2 px-3 rounded-xl bg-blue-50/50 hover:bg-blue-100/50 text-[#2563eb] font-bold text-xs transition-all">
-                Ganti Password
-              </button>
+              <Link href="/dashboard/kelola-akun/ganti-password">
+                <button className="w-full py-2 px-3 rounded-xl bg-blue-50/50 hover:bg-blue-100/50 text-[#2563eb] font-bold text-xs transition-all">
+                  Ganti Password
+                </button>
+              </Link>
               <button className="py-2 px-3 rounded-xl bg-rose-50/50 hover:bg-rose-100/50 text-rose-600 font-bold text-xs transition-all">
                 Hapus Akun
               </button>

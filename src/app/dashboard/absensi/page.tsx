@@ -134,21 +134,23 @@ export default function AbsensiPage() {
         </Link>
 
         {/* Presensi Siswa */}
-        <div className="bg-white border border-slate-100 p-6 rounded-2xl flex flex-col gap-4 shadow-[0_4px_20px_rgb(0,0,0,0.02)]">
-          <div className="flex justify-between items-start">
-            <div className="p-3 rounded-lg bg-amber-50 text-amber-600">
-              <User className="w-5 h-5" />
+        <Link href="/dashboard/absensi/siswa" className="block hover:opacity-95 transition-all">
+          <div className="bg-white border border-slate-100 p-6 rounded-2xl flex flex-col gap-4 shadow-[0_4px_20px_rgb(0,0,0,0.02)] h-full">
+            <div className="flex justify-between items-start">
+              <div className="p-3 rounded-lg bg-amber-50 text-amber-600">
+                <User className="w-5 h-5" />
+              </div>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold text-slate-400">Presensi Siswa</span>
+              <span className="text-3xl font-extrabold text-slate-800 mt-2">96.5%</span>
+              <div className="flex items-center gap-1 text-[10px] font-bold text-rose-500 mt-3">
+                <TrendingDown className="w-3.5 h-3.5" />
+                <span>-0.8% karena musim flu</span>
+              </div>
             </div>
           </div>
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-slate-400">Presensi Siswa</span>
-            <span className="text-3xl font-extrabold text-slate-800 mt-2">96.5%</span>
-            <div className="flex items-center gap-1 text-[10px] font-bold text-rose-500 mt-3">
-              <TrendingDown className="w-3.5 h-3.5" />
-              <span>-0.8% karena musim flu</span>
-            </div>
-          </div>
-        </div>
+        </Link>
       </div>
 
       {/* Monthly Attendance Trend Card */}
