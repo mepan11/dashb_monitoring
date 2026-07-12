@@ -37,7 +37,7 @@ interface RecentAttendance {
 export default function AbsensiPage() {
   // Navigation Tabs
   const [activeTab, setActiveTab] = useState<"monitoring" | "presensi" | "riwayat">("monitoring");
-  
+
   // Presensi Sub-Tabs
   const [presensiType, setPresensiType] = useState<"siswa" | "guru" | "coach" | "ekskul">("siswa");
 
@@ -73,12 +73,12 @@ export default function AbsensiPage() {
   const [subjects, setSubjects] = useState<any[]>([]);
   const [riwayatSubjects, setRiwayatSubjects] = useState<any[]>([]);
   const [extracurriculars, setExtracurriculars] = useState<any[]>([]);
-  
+
   // --- FORM INPUT STATES ---
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
-  
+
   // 1. Siswa (Class/Subject) Form
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
@@ -106,6 +106,22 @@ export default function AbsensiPage() {
   const [selectedRiwayatEkskulId, setSelectedRiwayatEkskulId] = useState<string>("");
 
   const [saving, setSaving] = useState(false);
+
+  // Real-time clock state (updates every second)
+  const [liveTime, setLiveTime] = useState<string>("");
+  const [liveSeconds, setLiveSeconds] = useState<string>("");
+
+  // Start live clock ticker
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      setLiveTime(now.toTimeString().slice(0, 5));      // "HH:MM"
+      setLiveSeconds(now.toTimeString().slice(0, 8));   // "HH:MM:SS"
+    };
+    tick(); // immediate first tick
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Set default dates safely using local timezone
   useEffect(() => {
@@ -298,13 +314,20 @@ export default function AbsensiPage() {
     teacherId: string,
     updates: Partial<{ status: string; checkInTime: string; checkOutTime: string }>
   ) => {
-    setTeacherAttMap((prev) => ({
-      ...prev,
-      [teacherId]: {
-        ...prev[teacherId],
-        ...updates
+    setTeacherAttMap((prev) => {
+      const current = prev[teacherId] || { status: "Hadir", checkInTime: "", checkOutTime: "" };
+      let newUpdates = { ...updates };
+      if (updates.status) {
+        if (updates.status === "Hadir") {
+          // times will be captured via liveTime at save time
+        } else {
+          // Izin / Absen: clear times
+          newUpdates.checkInTime = "";
+          newUpdates.checkOutTime = "";
+        }
       }
-    }));
+      return { ...prev, [teacherId]: { ...current, ...newUpdates } };
+    });
   };
 
   // Helper to change coach attendance status/times
@@ -312,13 +335,20 @@ export default function AbsensiPage() {
     coachId: string,
     updates: Partial<{ status: string; checkInTime: string; checkOutTime: string }>
   ) => {
-    setCoachAttMap((prev) => ({
-      ...prev,
-      [coachId]: {
-        ...prev[coachId],
-        ...updates
+    setCoachAttMap((prev) => {
+      const current = prev[coachId] || { status: "Hadir", checkInTime: "", checkOutTime: "" };
+      let newUpdates = { ...updates };
+      if (updates.status) {
+        if (updates.status === "Hadir") {
+          // times will be captured via liveTime at save time
+        } else {
+          // Izin / Absen: clear times
+          newUpdates.checkInTime = "";
+          newUpdates.checkOutTime = "";
+        }
       }
-    }));
+      return { ...prev, [coachId]: { ...current, ...newUpdates } };
+    });
   };
 
   // Helper to change ekskul student attendance status
@@ -368,18 +398,20 @@ export default function AbsensiPage() {
         status
       }));
     } else if (presensiType === "guru") {
+      const snapshotTime = liveTime; // Capture current real-time at moment of saving
       payload.attendance = Object.entries(teacherAttMap).map(([teacherId, val]) => ({
         teacherId: parseInt(teacherId),
         status: val.status,
-        checkInTime: `${val.checkInTime} WIB`,
-        checkOutTime: `${val.checkOutTime} WIB`
+        checkInTime: val.status === "Hadir" ? `${snapshotTime} WIB` : "",
+        checkOutTime: val.status === "Hadir" ? `${snapshotTime} WIB` : ""
       }));
     } else if (presensiType === "coach") {
+      const snapshotTime = liveTime; // Capture current real-time at moment of saving
       payload.attendance = Object.entries(coachAttMap).map(([coachId, val]) => ({
         coachId: parseInt(coachId),
         status: val.status,
-        checkInTime: `${val.checkInTime} WIB`,
-        checkOutTime: `${val.checkOutTime} WIB`
+        checkInTime: val.status === "Hadir" ? `${snapshotTime} WIB` : "",
+        checkOutTime: val.status === "Hadir" ? `${snapshotTime} WIB` : ""
       }));
     } else if (presensiType === "ekskul") {
       if (!selectedEkskulId) {
@@ -403,7 +435,7 @@ export default function AbsensiPage() {
       const data = await response.json();
       if (response.ok && data.success) {
         alert("Presensi berhasil dicatat!");
-        
+
         // Refresh values after saving
         if (presensiType === "siswa") {
           const resAtt = await fetch(`/api/absensi?type=students&date=${selectedDate}&classId=${selectedClassId}`).then((r) => r.json());
@@ -569,7 +601,7 @@ export default function AbsensiPage() {
       doc.setFontSize(9);
       doc.setFont("Helvetica", "normal");
       doc.setTextColor(71, 85, 105); // Slate-600
-      
+
       const formattedPeriod = `Periode: ${formatIndonesianDate(startDate)} s/d ${formatIndonesianDate(endDate)}`;
       if (subTitleText) {
         doc.text(subTitleText, 14, 44);
@@ -609,24 +641,30 @@ export default function AbsensiPage() {
           ]);
         } else if (riwayatType === "guru") {
           headers = ["No", "Nama Guru", "NIP", "Waktu Masuk", "Waktu Keluar", "Status"];
-          rows = dateRecords.map((r: any, idx: number) => [
-            idx + 1,
-            r.name,
-            r.nip,
-            r.checkInTime || "-- : --",
-            r.checkOutTime || "-- : --",
-            r.attendanceStatus
-          ]);
+          rows = dateRecords.map((r: any, idx: number) => {
+            // Auto-compute status: Hadir if checkInTime < 07:00, else Terlambat
+            let effectiveStatus = r.attendanceStatus;
+            if ((r.attendanceStatus === "Hadir" || r.attendanceStatus === "Terlambat") && r.checkInTime) {
+              const timePart = r.checkInTime.replace(" WIB", "").trim(); // e.g. "07:35"
+              const [hh, mm] = timePart.split(":").map(Number);
+              const totalMins = hh * 60 + mm;
+              effectiveStatus = totalMins < 7 * 60 ? "Hadir" : "Terlambat";
+            }
+            return [idx + 1, r.name, r.nip, r.checkInTime || "—", r.checkOutTime || "—", effectiveStatus];
+          });
         } else if (riwayatType === "coach") {
           headers = ["No", "Nama Coach", "ID Number", "Waktu Masuk", "Waktu Keluar", "Status"];
-          rows = dateRecords.map((r: any, idx: number) => [
-            idx + 1,
-            r.name,
-            r.idNumber,
-            r.checkInTime || "-- : --",
-            r.checkOutTime || "-- : --",
-            r.attendanceStatus
-          ]);
+          rows = dateRecords.map((r: any, idx: number) => {
+            // Auto-compute status: Hadir if checkInTime < 07:00, else Terlambat
+            let effectiveStatus = r.attendanceStatus;
+            if ((r.attendanceStatus === "Hadir" || r.attendanceStatus === "Terlambat") && r.checkInTime) {
+              const timePart = r.checkInTime.replace(" WIB", "").trim();
+              const [hh, mm] = timePart.split(":").map(Number);
+              const totalMins = hh * 60 + mm;
+              effectiveStatus = totalMins < 7 * 60 ? "Hadir" : "Terlambat";
+            }
+            return [idx + 1, r.name, r.idNumber, r.checkInTime || "—", r.checkOutTime || "—", effectiveStatus];
+          });
         } else if (riwayatType === "ekskul") {
           headers = ["No", "Nama Siswa", "Kelas", "NISN", "Status"];
           rows = dateRecords.map((r: any, idx: number) => [
@@ -733,31 +771,28 @@ export default function AbsensiPage() {
       <div className="flex border-b border-slate-200">
         <button
           onClick={() => setActiveTab("monitoring")}
-          className={`py-4 px-6 font-bold text-sm border-b-2 transition-all ${
-            activeTab === "monitoring"
+          className={`py-4 px-6 font-bold text-sm border-b-2 transition-all ${activeTab === "monitoring"
               ? "border-blue-600 text-blue-600"
               : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
+            }`}
         >
           Dashboard Monitoring Kehadiran
         </button>
         <button
           onClick={() => setActiveTab("presensi")}
-          className={`py-4 px-6 font-bold text-sm border-b-2 transition-all ${
-            activeTab === "presensi"
+          className={`py-4 px-6 font-bold text-sm border-b-2 transition-all ${activeTab === "presensi"
               ? "border-blue-600 text-blue-600"
               : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
+            }`}
         >
           Lakukan Presensi
         </button>
         <button
           onClick={() => setActiveTab("riwayat")}
-          className={`py-4 px-6 font-bold text-sm border-b-2 transition-all ${
-            activeTab === "riwayat"
+          className={`py-4 px-6 font-bold text-sm border-b-2 transition-all ${activeTab === "riwayat"
               ? "border-blue-600 text-blue-600"
               : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
+            }`}
         >
           Riwayat Presensi
         </button>
@@ -909,8 +944,15 @@ export default function AbsensiPage() {
 
           {/* Recent Attendance Status Table */}
           <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.02)] overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-800">Status Kehadiran Terbaru</h2>
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Status Kehadiran Terbaru</h2>
+                <p className="text-xs text-slate-400 mt-0.5">8 catatan presensi terkini dari semua tipe</p>
+              </div>
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Live
+              </span>
             </div>
 
             <div className="overflow-x-auto">
@@ -919,7 +961,7 @@ export default function AbsensiPage() {
                   <tr className="bg-[#fafbfc] border-b border-slate-100 text-[10px] font-extrabold text-slate-400 tracking-wider">
                     <th className="py-4.5 px-6">Nama</th>
                     <th className="py-4.5 px-6">Peran</th>
-                    <th className="py-4.5 px-6">Waktu Absen</th>
+                    <th className="py-4.5 px-6">Tanggal / Waktu</th>
                     <th className="py-4.5 px-6">Status</th>
                   </tr>
                 </thead>
@@ -958,46 +1000,28 @@ export default function AbsensiPage() {
                       </tr>
                     ))
                   ) : (
-                    recentAttendanceData.map((row) => (
-                      <tr key={row.id} className="hover:bg-slate-50/50 transition-all">
-                        <td className="py-4 px-6 flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-blue-50 text-[#2563eb] font-bold flex items-center justify-center border border-blue-100 shadow-sm shrink-0">
-                            {row.initials}
-                          </div>
-                          <span className="font-bold text-slate-800">{row.name}</span>
-                        </td>
-                        <td className="py-4 px-6 font-semibold text-slate-500">{row.role}</td>
-                        <td className="py-4 px-6 font-semibold text-slate-500">{row.time}</td>
-                        <td className="py-4 px-6">
-                          {row.status === "Hadir" && (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-emerald-100 bg-emerald-50 text-[10px] font-bold text-emerald-600">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                              {row.status}
-                            </span>
-                          )}
-                          {row.status === "Terlambat" && (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-amber-100 bg-amber-50 text-[10px] font-bold text-amber-700">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                              {row.status}
-                            </span>
-                          )}
-                          {row.status === "Absen" && (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-rose-100 bg-rose-50 text-[10px] font-bold text-rose-600">
-                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                              {row.status}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
+                    <tr>
+                      <td colSpan={4} className="py-16 px-6 text-center text-slate-400">
+                        <div className="flex flex-col items-center gap-2">
+                          <svg className="w-10 h-10 text-slate-200" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          <span className="text-xs font-semibold">Belum ada data presensi</span>
+                          <span className="text-[10px] text-slate-300">Data akan muncul setelah presensi pertama dicatat</span>
+                        </div>
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
             </div>
 
             <div className="p-4 border-t border-slate-100 flex items-center justify-center">
-              <button className="text-xs font-bold text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-6 py-2.5 hover:bg-slate-50 transition-all">
-                Lihat Semua Riwayat
+              <button
+                onClick={() => setActiveTab("riwayat")}
+                className="text-xs font-bold text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-6 py-2.5 hover:bg-slate-50 transition-all"
+              >
+                Lihat Semua Riwayat →
               </button>
             </div>
           </div>
@@ -1013,9 +1037,8 @@ export default function AbsensiPage() {
               <button
                 type="button"
                 onClick={() => setPresensiType("siswa")}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  presensiType === "siswa" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${presensiType === "siswa" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 <User className="w-3.5 h-3.5" />
                 Presensi Siswa (Kelas/Mapel)
@@ -1023,9 +1046,8 @@ export default function AbsensiPage() {
               <button
                 type="button"
                 onClick={() => setPresensiType("guru")}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  presensiType === "guru" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${presensiType === "guru" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 <GraduationCap className="w-3.5 h-3.5" />
                 Presensi Guru
@@ -1033,9 +1055,8 @@ export default function AbsensiPage() {
               <button
                 type="button"
                 onClick={() => setPresensiType("coach")}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  presensiType === "coach" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${presensiType === "coach" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 <Users className="w-3.5 h-3.5" />
                 Presensi Coach
@@ -1043,9 +1064,8 @@ export default function AbsensiPage() {
               <button
                 type="button"
                 onClick={() => setPresensiType("ekskul")}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  presensiType === "ekskul" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${presensiType === "ekskul" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 <Award className="w-3.5 h-3.5" />
                 Presensi Ekskul
@@ -1065,7 +1085,7 @@ export default function AbsensiPage() {
           </div>
 
           <form onSubmit={handleSaveAttendance} className="flex flex-col gap-6">
-            
+
             {/* SUB-FORM 1: PRESENSI SISWA KELAS / MAPEL */}
             {presensiType === "siswa" && (
               <div className="flex flex-col gap-6">
@@ -1137,17 +1157,16 @@ export default function AbsensiPage() {
                                       key={st}
                                       type="button"
                                       onClick={() => handleStudentAttChange(student.id, st)}
-                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
-                                        currentStatus === st
+                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${currentStatus === st
                                           ? st === "Hadir"
                                             ? "bg-emerald-50 text-emerald-600 border-emerald-200"
                                             : st === "Sakit"
-                                            ? "bg-blue-50 text-blue-600 border-blue-200"
-                                            : st === "Izin"
-                                            ? "bg-amber-50 text-amber-600 border-amber-200"
-                                            : "bg-rose-50 text-rose-600 border-rose-200"
+                                              ? "bg-blue-50 text-blue-600 border-blue-200"
+                                              : st === "Izin"
+                                                ? "bg-amber-50 text-amber-600 border-amber-200"
+                                                : "bg-rose-50 text-rose-600 border-rose-200"
                                           : "bg-white text-slate-400 border-slate-200 hover:text-slate-700 hover:bg-slate-50"
-                                      }`}
+                                        }`}
                                     >
                                       {st}
                                     </button>
@@ -1173,6 +1192,21 @@ export default function AbsensiPage() {
             {/* SUB-FORM 2: PRESENSI GURU */}
             {presensiType === "guru" && (
               <div className="flex flex-col gap-6">
+                {/* Live clock banner */}
+                <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl">
+                  <div className="flex items-center gap-2 text-[#2563eb]">
+                    <Clock className="w-4 h-4 animate-pulse" />
+                    <span className="text-xs font-bold">Waktu Sekarang (Real-time):</span>
+                  </div>
+                  <span className="font-mono text-lg font-extrabold text-[#2563eb] tracking-widest">
+                    {liveSeconds || "--:--:--"}
+                  </span>
+                  <span className="text-[10px] text-blue-400 font-semibold ml-1">WIB</span>
+                  <span className="ml-auto text-[10px] text-slate-400 font-semibold">
+                    Klik tombol <span className="bg-blue-100 text-blue-600 px-1 rounded">Sekarang</span> untuk mengisi waktu secara otomatis
+                  </span>
+                </div>
+
                 {teachersList.length > 0 ? (
                   <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm mt-4">
                     <table className="w-full text-left border-collapse">
@@ -1200,32 +1234,32 @@ export default function AbsensiPage() {
                               </td>
                               <td className="py-4 px-6 text-slate-400">{teacher.nip}</td>
                               <td className="py-4 px-6">
-                                <div className="flex items-center gap-2">
-                                  <Clock className="w-4 h-4 text-slate-400" />
-                                  <input
-                                    type="time"
-                                    value={state.checkInTime}
-                                    onChange={(e) => handleTeacherAttChange(teacher.id, { checkInTime: e.target.value })}
-                                    disabled={state.status === "Izin" || state.status === "Absen"}
-                                    className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-semibold text-slate-600 disabled:opacity-50"
-                                  />
-                                </div>
+                                {state.status === "Izin" || state.status === "Absen" ? (
+                                  <span className="text-slate-300 font-bold text-sm">—</span>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                                    <span className="font-mono font-extrabold text-[#2563eb] text-sm tracking-widest">
+                                      {liveSeconds || "--:--:--"}
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-4 px-6">
+                                {state.status === "Izin" || state.status === "Absen" ? (
+                                  <span className="text-slate-300 font-bold text-sm">—</span>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                                    <span className="font-mono font-extrabold text-[#2563eb] text-sm tracking-widest">
+                                      {liveSeconds || "--:--:--"}
+                                    </span>
+                                  </div>
+                                )}
                               </td>
                               <td className="py-4 px-6">
                                 <div className="flex items-center gap-2">
-                                  <Clock className="w-4 h-4 text-slate-400" />
-                                  <input
-                                    type="time"
-                                    value={state.checkOutTime}
-                                    onChange={(e) => handleTeacherAttChange(teacher.id, { checkOutTime: e.target.value })}
-                                    disabled={state.status === "Izin" || state.status === "Absen"}
-                                    className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-semibold text-slate-600 disabled:opacity-50"
-                                  />
-                                </div>
-                              </td>
-                              <td className="py-4 px-6">
-                                <div className="flex items-center gap-2">
-                                  {["Hadir", "Terlambat", "Izin", "Absen"].map((st) => (
+                                  {["Hadir", "Izin", "Absen"].map((st) => (
                                     <button
                                       key={st}
                                       type="button"
@@ -1234,11 +1268,9 @@ export default function AbsensiPage() {
                                         state.status === st
                                           ? st === "Hadir"
                                             ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                                            : st === "Terlambat"
-                                            ? "bg-amber-50 text-amber-700 border-amber-200"
                                             : st === "Izin"
-                                            ? "bg-blue-50 text-blue-600 border-blue-200"
-                                            : "bg-rose-50 text-rose-600 border-rose-200"
+                                              ? "bg-blue-50 text-blue-600 border-blue-200"
+                                              : "bg-rose-50 text-rose-600 border-rose-200"
                                           : "bg-white text-slate-400 border-slate-200 hover:text-slate-700 hover:bg-slate-50"
                                       }`}
                                     >
@@ -1264,6 +1296,21 @@ export default function AbsensiPage() {
             {/* SUB-FORM 3: PRESENSI COACH */}
             {presensiType === "coach" && (
               <div className="flex flex-col gap-6">
+                {/* Live clock banner */}
+                <div className="flex items-center gap-3 px-4 py-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+                  <div className="flex items-center gap-2 text-emerald-600">
+                    <Clock className="w-4 h-4 animate-pulse" />
+                    <span className="text-xs font-bold">Waktu Sekarang (Real-time):</span>
+                  </div>
+                  <span className="font-mono text-lg font-extrabold text-emerald-600 tracking-widest">
+                    {liveSeconds || "--:--:--"}
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-semibold ml-1">WIB</span>
+                  <span className="ml-auto text-[10px] text-slate-400 font-semibold">
+                    Klik tombol <span className="bg-emerald-100 text-emerald-600 px-1 rounded">Sekarang</span> untuk mengisi waktu secara otomatis
+                  </span>
+                </div>
+
                 {coachesList.length > 0 ? (
                   <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm mt-4">
                     <table className="w-full text-left border-collapse">
@@ -1291,32 +1338,32 @@ export default function AbsensiPage() {
                               </td>
                               <td className="py-4 px-6 text-slate-400">{coach.idNumber}</td>
                               <td className="py-4 px-6">
-                                <div className="flex items-center gap-2">
-                                  <Clock className="w-4 h-4 text-slate-400" />
-                                  <input
-                                    type="time"
-                                    value={state.checkInTime}
-                                    onChange={(e) => handleCoachAttChange(coach.id, { checkInTime: e.target.value })}
-                                    disabled={state.status === "Izin" || state.status === "Absen"}
-                                    className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-semibold text-slate-600 disabled:opacity-50"
-                                  />
-                                </div>
+                                {state.status === "Izin" || state.status === "Absen" ? (
+                                  <span className="text-slate-300 font-bold text-sm">—</span>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
+                                    <span className="font-mono font-extrabold text-emerald-600 text-sm tracking-widest">
+                                      {liveSeconds || "--:--:--"}
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-4 px-6">
+                                {state.status === "Izin" || state.status === "Absen" ? (
+                                  <span className="text-slate-300 font-bold text-sm">—</span>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
+                                    <span className="font-mono font-extrabold text-emerald-600 text-sm tracking-widest">
+                                      {liveSeconds || "--:--:--"}
+                                    </span>
+                                  </div>
+                                )}
                               </td>
                               <td className="py-4 px-6">
                                 <div className="flex items-center gap-2">
-                                  <Clock className="w-4 h-4 text-slate-400" />
-                                  <input
-                                    type="time"
-                                    value={state.checkOutTime}
-                                    onChange={(e) => handleCoachAttChange(coach.id, { checkOutTime: e.target.value })}
-                                    disabled={state.status === "Izin" || state.status === "Absen"}
-                                    className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-semibold text-slate-600 disabled:opacity-50"
-                                  />
-                                </div>
-                              </td>
-                              <td className="py-4 px-6">
-                                <div className="flex items-center gap-2">
-                                  {["Hadir", "Terlambat", "Izin", "Absen"].map((st) => (
+                                  {["Hadir", "Izin", "Absen"].map((st) => (
                                     <button
                                       key={st}
                                       type="button"
@@ -1325,11 +1372,9 @@ export default function AbsensiPage() {
                                         state.status === st
                                           ? st === "Hadir"
                                             ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                                            : st === "Terlambat"
-                                            ? "bg-amber-50 text-amber-700 border-amber-200"
                                             : st === "Izin"
-                                            ? "bg-blue-50 text-blue-600 border-blue-200"
-                                            : "bg-rose-50 text-rose-600 border-rose-200"
+                                              ? "bg-blue-50 text-blue-600 border-blue-200"
+                                              : "bg-rose-50 text-rose-600 border-rose-200"
                                           : "bg-white text-slate-400 border-slate-200 hover:text-slate-700 hover:bg-slate-50"
                                       }`}
                                     >
@@ -1385,7 +1430,7 @@ export default function AbsensiPage() {
                       <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-semibold">
                         {ekskulStudents.map((student) => {
                           const currentStatus = ekskulAttMap[student.id] || "Hadir";
-                          
+
                           // Initials
                           const nameParts = student.name.trim().split(" ");
                           const initials = nameParts.length >= 2
@@ -1411,17 +1456,16 @@ export default function AbsensiPage() {
                                       key={st}
                                       type="button"
                                       onClick={() => handleEkskulAttChange(student.id, st)}
-                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
-                                        currentStatus === st
+                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${currentStatus === st
                                           ? st === "Hadir"
                                             ? "bg-emerald-50 text-emerald-600 border-emerald-200"
                                             : st === "Sakit"
-                                            ? "bg-blue-50 text-blue-600 border-blue-200"
-                                            : st === "Izin"
-                                            ? "bg-amber-50 text-amber-600 border-amber-200"
-                                            : "bg-rose-50 text-rose-600 border-rose-200"
+                                              ? "bg-blue-50 text-blue-600 border-blue-200"
+                                              : st === "Izin"
+                                                ? "bg-amber-50 text-amber-600 border-amber-200"
+                                                : "bg-rose-50 text-rose-600 border-rose-200"
                                           : "bg-white text-slate-400 border-slate-200 hover:text-slate-700 hover:bg-slate-50"
-                                      }`}
+                                        }`}
                                     >
                                       {st}
                                     </button>
@@ -1449,17 +1493,17 @@ export default function AbsensiPage() {
               (presensiType === "guru" && teachersList.length > 0) ||
               (presensiType === "coach" && coachesList.length > 0) ||
               (presensiType === "ekskul" && selectedEkskulId && ekskulStudents.length > 0)) && (
-              <div className="flex justify-end border-t border-slate-100 pt-6 mt-4">
-                <Button
-                  type="submit"
-                  disabled={saving}
-                  className="!w-auto !py-3 !px-8 flex items-center gap-2 rounded-xl font-bold text-xs bg-[#2563eb] text-white shadow-md hover:bg-blue-700 transition-all disabled:opacity-50"
-                >
-                  <Save className="w-4 h-4" />
-                  {saving ? "Menyimpan..." : "Simpan Presensi"}
-                </Button>
-              </div>
-            )}
+                <div className="flex justify-end border-t border-slate-100 pt-6 mt-4">
+                  <Button
+                    type="submit"
+                    disabled={saving}
+                    className="!w-auto !py-3 !px-8 flex items-center gap-2 rounded-xl font-bold text-xs bg-[#2563eb] text-white shadow-md hover:bg-blue-700 transition-all disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    {saving ? "Menyimpan..." : "Simpan Presensi"}
+                  </Button>
+                </div>
+              )}
 
           </form>
         </div>
@@ -1474,9 +1518,8 @@ export default function AbsensiPage() {
               <button
                 type="button"
                 onClick={() => setRiwayatType("siswa")}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  riwayatType === "siswa" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${riwayatType === "siswa" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 <User className="w-3.5 h-3.5" />
                 Kehadiran Siswa
@@ -1484,9 +1527,8 @@ export default function AbsensiPage() {
               <button
                 type="button"
                 onClick={() => setRiwayatType("guru")}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  riwayatType === "guru" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${riwayatType === "guru" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 <GraduationCap className="w-3.5 h-3.5" />
                 Kehadiran Guru
@@ -1494,9 +1536,8 @@ export default function AbsensiPage() {
               <button
                 type="button"
                 onClick={() => setRiwayatType("coach")}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  riwayatType === "coach" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${riwayatType === "coach" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 <Users className="w-3.5 h-3.5" />
                 Kehadiran Coach
@@ -1504,9 +1545,8 @@ export default function AbsensiPage() {
               <button
                 type="button"
                 onClick={() => setRiwayatType("ekskul")}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  riwayatType === "ekskul" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${riwayatType === "ekskul" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 <Award className="w-3.5 h-3.5" />
                 Kehadiran Ekskul
@@ -1537,7 +1577,7 @@ export default function AbsensiPage() {
           </div>
 
           <form onSubmit={handlePrintPDF} className="flex flex-col gap-6">
-            
+
             {/* Filter Inputs depending on selection */}
             {riwayatType === "siswa" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1605,7 +1645,7 @@ export default function AbsensiPage() {
                   Mengunduh laporan rekapitulasi kehadiran periode <strong>{formatIndonesianDate(startDate)} s/d {formatIndonesianDate(endDate)}</strong> dalam format PDF. Laporan ini dapat dicetak secara fisik.
                 </span>
               </div>
-              
+
               <Button
                 type="submit"
                 disabled={saving}

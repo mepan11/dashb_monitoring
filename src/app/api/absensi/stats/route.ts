@@ -110,19 +110,46 @@ export async function GET() {
 
     // 3. Fetch Recent Attendance Log
     const [recentRows]: any = await db.query(
-      `(SELECT sa.id, s.name, 'Siswa' AS role, '—' AS time, sa.status, sa.date, sa.created_at
+      `(
+        SELECT 
+          sa.id,
+          s.name,
+          'Siswa' AS role,
+          DATE_FORMAT(sa.date, '%d %b %Y') AS time,
+          sa.status,
+          sa.date,
+          sa.created_at
         FROM student_attendance sa
-        JOIN students s ON sa.student_id = s.id)
-       UNION ALL
-       (SELECT ta.id, t.name, 'Guru' AS role, ta.check_in_time AS time, ta.status, ta.date, ta.created_at
+        JOIN students s ON sa.student_id = s.id
+      )
+      UNION ALL
+      (
+        SELECT 
+          ta.id,
+          t.name,
+          'Guru' AS role,
+          IFNULL(ta.check_in_time, DATE_FORMAT(ta.date, '%d %b %Y')) AS time,
+          ta.status,
+          ta.date,
+          ta.created_at
         FROM teacher_attendance ta
-        JOIN teachers t ON ta.teacher_id = t.id)
-       UNION ALL
-       (SELECT ca.id, c.name, 'Coach' AS role, ca.check_in_time AS time, ca.status, ca.date, ca.created_at
+        JOIN teachers t ON ta.teacher_id = t.id
+      )
+      UNION ALL
+      (
+        SELECT 
+          ca.id,
+          c.name,
+          'Coach' AS role,
+          IFNULL(ca.check_in_time, '—') AS time,
+          ca.status,
+          ca.date,
+          ca.created_at
         FROM coach_attendance ca
-        JOIN coaches c ON ca.coach_id = c.id)
-       ORDER BY date DESC, created_at DESC
-       LIMIT 5`
+        JOIN coaches c ON ca.coach_id = c.id
+      )
+      ORDER BY date DESC, created_at DESC
+      LIMIT 8`
     );
 
     const recentLogs = recentRows.map((r: any) => {
