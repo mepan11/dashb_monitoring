@@ -1,41 +1,111 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Save,
-  Info,
   User,
   Mail,
-  Phone,
-  BookOpen,
-  Camera,
-  CheckCircle2,
   Calendar,
   Lightbulb,
-  Upload,
+  CheckCircle2,
+  Clock,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
-export default function EditCoachPage() {
+function EditCoachContent() {
   const router = useRouter();
-  const [name, setName] = useState("Ahmad Subardjo");
-  const [nik, setNik] = useState("3171012345678901");
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id") || "1";
+
+  const [name, setName] = useState("");
+  const [nik, setNik] = useState("");
   const [gender, setGender] = useState("L");
   const [birthPlace, setBirthPlace] = useState("Jakarta");
   const [birthDate, setBirthDate] = useState("1990-05-14");
-  const [address, setAddress] = useState("Jl. Flamboyan No. 12, Kebayoran Lama, Jakarta Selatan");
-  const [email, setEmail] = useState("ahmad.s@lumina.sch.id");
-  const [phone, setPhone] = useState("81234567890");
-  const [specialization, setSpecialization] = useState("Sains");
-  const [ekskul, setEkskul] = useState("Robotik & Coding");
+  const [address, setAddress] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [specialization, setSpecialization] = useState("");
+  const [ekskul, setEkskul] = useState("");
+  const [status, setStatus] = useState("Aktif");
+  const [schedule, setSchedule] = useState("");
+  const [location, setLocation] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    async function fetchCoach() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/coaches/${id}`);
+        const json = await res.json();
+        if (json.success) {
+          const c = json.data;
+          setName(c.name);
+          setNik(c.idNumber);
+          setEmail(c.email);
+          setPhone(c.contact);
+          setEkskul(c.specialization);
+          setSpecialization(c.specialization);
+          setStatus(c.status);
+          setSchedule(c.schedule || "Selasa, Kamis");
+          setLocation(c.location || "Lab Komputer 2, Ruang Robotik");
+        }
+      } catch (err) {
+        console.error("Failed to fetch coach details:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchCoach();
+  }, [id]);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Perubahan Data Coach Berhasil Disimpan!");
-    router.push("/dashboard/coach/profile");
+    try {
+      const response = await fetch(`/api/coaches/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          idNumber: nik,
+          specialization: ekskul,
+          contact: phone,
+          status,
+          schedule,
+          location,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        alert("Perubahan Data Coach Berhasil Disimpan!");
+        router.push(`/dashboard/coach/profile?id=${id}`);
+      } else {
+        alert(data.message || "Gagal memperbarui data coach");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan koneksi");
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="py-20 text-center text-slate-400 font-bold">
+        Memuat data coach...
+      </div>
+    );
+  }
+
+  const initials = name.split(" ").length >= 2
+    ? `${name.split(" ")[0][0]}${name.split(" ")[1][0]}`.toUpperCase()
+    : `${name[0] || "C"}`.toUpperCase();
 
   return (
     <div className="flex flex-col gap-8">
@@ -95,7 +165,6 @@ export default function EditCoachPage() {
                   required
                   className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
                 >
-                  <option value="">Pilih Jenis Kelamin</option>
                   <option value="L">Laki-laki</option>
                   <option value="P">Perempuan</option>
                 </select>
@@ -183,44 +252,68 @@ export default function EditCoachPage() {
           <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-5">
             <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
               <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
-                <BookOpen className="w-4 h-4" />
+                <Clock className="w-4 h-4" />
               </div>
-              Penugasan Coach
+              Penugasan Ekskul, Jadwal & Lokasi
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Spesialisasi</label>
-                <select
-                  value={specialization}
-                  onChange={(e) => setSpecialization(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
-                >
-                  <option value="">Pilih Spesialisasi</option>
-                  <option value="Sains">Sains (Robotik, Coding, dll)</option>
-                  <option value="Olahraga">Olahraga (Futsal, Basket, dll)</option>
-                  <option value="Seni">Seni (Tari, Lukis, dll)</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Bidang Ekskul yang Diampu</label>
                 <input
                   type="text"
-                  placeholder="Contoh: Robotik, Futsal, Tari Tradisional"
+                  placeholder="Contoh: Robotik, Sepak Bola, Seni Lukis"
                   value={ekskul}
                   onChange={(e) => setEkskul(e.target.value)}
                   required
                   className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
                 />
               </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Hari Latihan</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Selasa, Kamis"
+                  value={schedule}
+                  onChange={(e) => setSchedule(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Lokasi Latihan</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Lab Komputer 2, Ruang Robotik"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status Kepegawaian</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                >
+                  <option value="Aktif">Aktif</option>
+                  <option value="Non-Aktif">Non-Aktif</option>
+                </select>
+              </div>
             </div>
           </div>
 
           {/* Bottom Actions Form Footer */}
           <div className="flex items-center justify-end gap-4 border-t border-slate-100/80 pt-6 mt-2">
-            <Link href="/dashboard/coach/profile">
+            <Link href={`/dashboard/coach/profile?id=${id}`}>
               <span className="text-slate-500 hover:text-slate-800 text-xs font-bold cursor-pointer px-4 py-2.5 rounded-lg">
                 Batalkan
               </span>
@@ -235,17 +328,16 @@ export default function EditCoachPage() {
 
         </form>
 
-        {/* Right Column (Foto Profil & Status Pendaftaran) */}
+        {/* Right Column */}
         <div className="w-full lg:w-[360px] flex flex-col gap-6 shrink-0">
           
           {/* Card 1: Foto Profil Coach */}
           <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-6">
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Foto Profil Coach</h4>
 
-            {/* Avatar display since it's Edit mode */}
             <div className="flex flex-col items-center justify-center gap-4">
               <div className="w-24 h-24 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-md flex items-center justify-center font-extrabold text-2xl">
-                AS
+                {initials}
               </div>
               <span className="text-xs font-bold text-[#2563eb] hover:underline cursor-pointer">Ganti Foto Profil</span>
             </div>
@@ -277,46 +369,18 @@ export default function EditCoachPage() {
             </div>
           </div>
 
-          {/* Card 2: Status Pendaftaran */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-6">
-            <div className="flex items-center justify-between text-xs font-bold">
-              <span className="text-slate-700 font-extrabold text-sm">Kelengkapan Form</span>
-              <span className="text-[#2563eb]">100%</span>
-            </div>
-
-            {/* Progress bar */}
-            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-              <div style={{ width: "100%" }} className="h-full bg-emerald-500 rounded-full"></div>
-            </div>
-
-            {/* Steps Checklist */}
-            <div className="flex flex-col gap-3.5 mt-2">
-              <div className="flex items-center justify-between text-xs font-bold text-emerald-600">
-                <span>Biodata Pribadi</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 fill-emerald-50" />
-              </div>
-
-              <div className="flex items-center justify-between text-xs font-bold text-emerald-600">
-                <span>Informasi Kontak</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 fill-emerald-50" />
-              </div>
-
-              <div className="flex items-center justify-between text-xs font-bold text-emerald-600">
-                <span>Kredensial Akun</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 fill-emerald-50" />
-              </div>
-
-              <div className="flex items-center justify-between text-xs font-bold text-emerald-600">
-                <span>Penugasan Coach</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 fill-emerald-50" />
-              </div>
-            </div>
-          </div>
-
         </div>
 
       </div>
 
     </div>
+  );
+}
+
+export default function EditCoachPage() {
+  return (
+    <Suspense fallback={<div className="py-20 text-center text-slate-400 font-bold">Memuat Halaman...</div>}>
+      <EditCoachContent />
+    </Suspense>
   );
 }

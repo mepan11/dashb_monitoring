@@ -9,20 +9,38 @@ import { Button } from "@/components/ui/Button";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
     
-    // Dummy authentication logic
-    console.log("Submitting login credentials:", { email, password });
-    
-    setTimeout(() => {
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // Successful login
+        router.push("/dashboard");
+      } else {
+        setError(data.message || "Email atau kata sandi salah");
+      }
+    } catch (err) {
+      console.error("Login request failed:", err);
+      setError("Koneksi gagal, silakan coba beberapa saat lagi");
+    } finally {
       setLoading(false);
-      router.push("/dashboard");
-    }, 800);
+    }
   };
 
   return (
@@ -61,6 +79,12 @@ export default function LoginPage() {
           <p className="text-sm text-slate-500 mt-1.5 mb-8">
             Masuk untuk mengakses monitoring sekolah Anda.
           </p>
+
+          {error && (
+            <div className="mb-5 p-3.5 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-xs font-bold text-center">
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             <Input

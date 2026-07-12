@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Users,
@@ -15,6 +15,7 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Search,
 } from "lucide-react";
 import { StatCard } from "@/components/ui/StatCard";
 import { Button } from "@/components/ui/Button";
@@ -25,104 +26,132 @@ interface Coach {
   email: string;
   idNumber: string;
   specialization: string;
-  specializationType: "robotik" | "tari" | "futsal" | string;
+  specializationType: string;
   contact: string;
-  status: "Aktif" | "Non-Aktif";
+  status: "Aktif" | "Non-Aktif" | string;
   initials: string;
 }
 
 export default function CoachPage() {
   const [selectedBidang, setSelectedBidang] = useState("Semua Bidang");
-  const [selectedStatus, setSelectedStatus] = useState("Status: Aktif");
+  const [selectedStatus, setSelectedStatus] = useState("Status: Semua");
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  const [coaches, setCoaches] = useState<Coach[]>([]);
+  const [statsData, setStatsData] = useState({ total: 0, active: 0, specializationCount: 0, nonActive: 0 });
+  const [filteredTotal, setFilteredTotal] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [limit] = useState(5);
+  const [loading, setLoading] = useState(true);
 
-  // KPI Data
+  useEffect(() => {
+    async function fetchCoaches() {
+      setLoading(true);
+      try {
+        const cleanStatus = selectedStatus === "Status: Aktif" ? "Aktif" : selectedStatus === "Status: Non-Aktif" ? "Non-Aktif" : "Semua";
+        const queryParams = new URLSearchParams({
+          page: String(currentPage),
+          limit: String(limit),
+          status: cleanStatus,
+          specialization: selectedBidang,
+          search: searchQuery,
+        });
+        const res = await fetch(`/api/coaches?${queryParams.toString()}`);
+        const data = await res.json();
+        if (data.success) {
+          setCoaches(data.data);
+          setStatsData(data.stats);
+          setFilteredTotal(data.filteredTotal || 0);
+        }
+      } catch (err) {
+        console.error("Failed to fetch coaches:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchCoaches();
+  }, [selectedBidang, selectedStatus, searchQuery, currentPage, limit]);
+
+  const handleResetFilters = () => {
+    setSelectedBidang("Semua Bidang");
+    setSelectedStatus("Status: Semua");
+    setSearchQuery("");
+    setCurrentPage(1);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus data coach ini?")) {
+      return;
+    }
+    try {
+      const response = await fetch(`/api/coaches/${id}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        alert("Data coach berhasil dihapus");
+        // Reload page
+        setCurrentPage(1);
+        // Trigger refetch by resetting search/filters slightly or just re-running query
+        setSearchQuery((q) => q + " ");
+        setTimeout(() => setSearchQuery((q) => q.trim()), 50);
+      } else {
+        alert(data.message || "Gagal menghapus coach");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan koneksi");
+    }
+  };
+
+  const getSpecializationBadgeStyles = (spec: string) => {
+    const s = spec.toLowerCase();
+    if (s.includes("robotik") || s.includes("coding")) {
+      return "bg-blue-50 text-blue-600 border border-blue-100";
+    } else if (s.includes("tari") || s.includes("lukis") || s.includes("seni")) {
+      return "bg-amber-50 text-amber-600 border border-amber-100";
+    } else if (s.includes("futsal") || s.includes("bola") || s.includes("basket") || s.includes("olahraga")) {
+      return "bg-emerald-50 text-emerald-600 border border-emerald-100";
+    } else {
+      return "bg-slate-50 text-slate-600 border border-slate-100";
+    }
+  };
+
+  // KPI Card Config
   const stats = [
     {
       title: "Total Coach",
-      value: 24,
-      badge: "+4 MoM",
-      badgeType: "success" as const,
+      value: statsData.total,
       icon: Users,
       iconBg: "bg-blue-50",
       iconColor: "text-blue-600",
     },
     {
       title: "Aktif",
-      value: 21,
+      value: statsData.active,
       icon: CheckCircle,
       iconBg: "bg-emerald-50",
       iconColor: "text-emerald-600",
     },
     {
       title: "Spesialisasi",
-      value: "12 Bidang",
+      value: `${statsData.specializationCount} Bidang`,
       icon: Shapes,
       iconBg: "bg-amber-50/70",
       iconColor: "text-amber-600",
     },
     {
       title: "Non-Aktif",
-      value: 3,
+      value: statsData.nonActive,
       icon: Ban,
       iconBg: "bg-rose-50",
       iconColor: "text-rose-600",
     },
   ];
 
-  // Dummy Coach Data
-  const coaches: Coach[] = [
-    {
-      id: "1",
-      name: "Ahmad Subardjo",
-      email: "ahmad.s@lumina.sch.id",
-      idNumber: "LC-2024-001",
-      specialization: "Robotik",
-      specializationType: "robotik",
-      contact: "+62 812-3456-7890",
-      status: "Aktif",
-      initials: "AS",
-    },
-    {
-      id: "2",
-      name: "Siti Nurhaliza",
-      email: "siti.n@lumina.sch.id",
-      idNumber: "LC-2024-042",
-      specialization: "Tari Tradisional",
-      specializationType: "tari",
-      contact: "+62 811-9876-5432",
-      status: "Aktif",
-      initials: "SN",
-    },
-    {
-      id: "3",
-      name: "Bambang Pamungkas",
-      email: "b.pamungkas@lumina.sch.id",
-      idNumber: "LC-2024-015",
-      specialization: "Futsal",
-      specializationType: "futsal",
-      contact: "+62 822-4455-6677",
-      status: "Non-Aktif",
-      initials: "BP",
-    },
-  ];
-
-  const handleResetFilters = () => {
-    setSelectedBidang("Semua Bidang");
-    setSelectedStatus("Status: Aktif");
-  };
-
-  const getSpecializationBadgeStyles = (type: string) => {
-    switch (type) {
-      case "robotik":
-        return "bg-blue-50 text-blue-600 border border-blue-100";
-      case "tari":
-        return "bg-amber-50 text-amber-600 border border-amber-100";
-      case "futsal":
-        return "bg-emerald-50 text-emerald-600 border border-emerald-100";
-      default:
-        return "bg-slate-50 text-slate-600 border border-slate-100";
-    }
-  };
+  const totalPages = Math.ceil(filteredTotal / limit) || 1;
+  const startEntry = filteredTotal > 0 ? (currentPage - 1) * limit + 1 : 0;
+  const endEntry = Math.min(currentPage * limit, filteredTotal);
 
   return (
     <div className="flex flex-col gap-8">
@@ -158,8 +187,6 @@ export default function CoachPage() {
             key={index}
             title={stat.title}
             value={stat.value}
-            badge={stat.badge}
-            badgeType={stat.badgeType}
             icon={stat.icon}
             iconBg={stat.iconBg}
             iconColor={stat.iconColor}
@@ -171,7 +198,7 @@ export default function CoachPage() {
       <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.02)] overflow-hidden">
         
         {/* Filter Controls Bar */}
-        <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        <div className="p-5 border-b border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
             {/* Filter icon label */}
             <div className="flex items-center gap-2 px-4 py-2 bg-[#f4f7fc] text-slate-600 rounded-lg text-xs font-semibold border border-slate-100">
@@ -179,17 +206,36 @@ export default function CoachPage() {
               Filter:
             </div>
 
+            {/* Search query input */}
+            <div className="relative flex items-center">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Cari coach..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="bg-white border border-slate-200/80 rounded-lg pl-9 pr-4 py-2 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-600 placeholder-slate-400 w-52"
+              />
+            </div>
+
             {/* Dropdown 1 */}
             <div className="relative">
               <select
                 value={selectedBidang}
-                onChange={(e) => setSelectedBidang(e.target.value)}
+                onChange={(e) => {
+                  setSelectedBidang(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="appearance-none bg-white border border-slate-200/80 rounded-lg px-4 py-2 pr-10 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
               >
                 <option>Semua Bidang</option>
                 <option>Robotik</option>
-                <option>Tari Tradisional</option>
-                <option>Futsal</option>
+                <option>Sepak Bola</option>
+                <option>Seni Lukis</option>
+                <option>Basket</option>
               </select>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
@@ -198,9 +244,13 @@ export default function CoachPage() {
             <div className="relative">
               <select
                 value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
+                onChange={(e) => {
+                  setSelectedStatus(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="appearance-none bg-white border border-slate-200/80 rounded-lg px-4 py-2 pr-10 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
               >
+                <option>Status: Semua</option>
                 <option>Status: Aktif</option>
                 <option>Status: Non-Aktif</option>
               </select>
@@ -219,121 +269,151 @@ export default function CoachPage() {
 
         {/* Data Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-100 bg-[#fafbfc] text-[10px] font-extrabold text-slate-400 tracking-wider">
-                <th className="py-4 px-6">NAMA COACH</th>
-                <th className="py-4 px-6">ID NUMBER</th>
-                <th className="py-4 px-6">SPESIALISASI</th>
-                <th className="py-4 px-6">KONTAK</th>
-                <th className="py-4 px-6">STATUS</th>
-                <th className="py-4 px-6 text-center">AKSI</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-              {coaches.map((coach) => (
-                <tr key={coach.id} className="hover:bg-slate-50/50 transition-all">
-                  
-                  {/* Name and Email */}
-                  <td className="py-4 px-6 flex items-center gap-3">
-                    {/* Initials Avatar */}
-                    <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 font-bold flex items-center justify-center border border-blue-100 shadow-sm shrink-0">
-                      {coach.initials}
-                    </div>
-                    <div className="flex flex-col">
-                      <Link href="/dashboard/coach/profile" className="font-bold text-slate-800 hover:text-[#2563eb] transition-all">
-                        {coach.name}
-                      </Link>
-                      <span className="text-[10px] text-slate-400 mt-0.5">{coach.email}</span>
-                    </div>
-                  </td>
-
-                  {/* ID Number */}
-                  <td className="py-4 px-6 font-medium text-slate-500">
-                    {coach.idNumber}
-                  </td>
-
-                  {/* Specialization Badge */}
-                  <td className="py-4 px-6">
-                    <span
-                      className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${getSpecializationBadgeStyles(
-                        coach.specializationType
-                      )}`}
-                    >
-                      {coach.specialization}
-                    </span>
-                  </td>
-
-                  {/* Contact */}
-                  <td className="py-4 px-6 font-medium text-slate-600">
-                    {coach.contact}
-                  </td>
-
-                  {/* Status Badge */}
-                  <td className="py-4 px-6">
-                    {coach.status === "Aktif" ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-emerald-100 bg-emerald-50 text-[10px] font-bold text-emerald-600">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        {coach.status}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-rose-100 bg-rose-50 text-[10px] font-bold text-rose-600">
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                        {coach.status}
-                      </span>
-                    )}
-                  </td>
-
-                  {/* Actions */}
-                  <td className="py-4 px-6 text-center">
-                    <div className="flex items-center justify-center gap-3">
-                      <Link href="/dashboard/coach/profile" className="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition-all">
-                        <Eye className="w-4 h-4" />
-                      </Link>
-                      <Link href="/dashboard/coach/edit" className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all">
-                        <Pencil className="w-4 h-4" />
-                      </Link>
-                      <button className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-
+          {loading ? (
+            <div className="py-20 text-center text-slate-400 font-bold">
+              Memuat data coach...
+            </div>
+          ) : coaches.length === 0 ? (
+            <div className="py-20 text-center text-slate-400 font-bold">
+              Tidak ada data coach ditemukan.
+            </div>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-100 bg-[#fafbfc] text-[10px] font-extrabold text-slate-400 tracking-wider">
+                  <th className="py-4 px-6">NAMA COACH</th>
+                  <th className="py-4 px-6">ID NUMBER</th>
+                  <th className="py-4 px-6">SPESIALISASI</th>
+                  <th className="py-4 px-6">KONTAK</th>
+                  <th className="py-4 px-6">STATUS</th>
+                  <th className="py-4 px-6 text-center">AKSI</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                {coaches.map((coach) => (
+                  <tr key={coach.id} className="hover:bg-slate-50/50 transition-all">
+                    
+                    {/* Name and Email */}
+                    <td className="py-4 px-6 flex items-center gap-3">
+                      {/* Initials Avatar */}
+                      <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 font-bold flex items-center justify-center border border-blue-100 shadow-sm shrink-0">
+                        {coach.initials}
+                      </div>
+                      <div className="flex flex-col">
+                        <Link href={`/dashboard/coach/profile?id=${coach.id}`} className="font-bold text-slate-800 hover:text-[#2563eb] transition-all">
+                          {coach.name}
+                        </Link>
+                        <span className="text-[10px] text-slate-400 mt-0.5">{coach.email}</span>
+                      </div>
+                    </td>
+
+                    {/* ID Number */}
+                    <td className="py-4 px-6 font-medium text-slate-500">
+                      {coach.idNumber}
+                    </td>
+
+                    {/* Specialization Badge */}
+                    <td className="py-4 px-6">
+                      <span
+                        className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${getSpecializationBadgeStyles(
+                          coach.specialization
+                        )}`}
+                      >
+                        {coach.specialization}
+                      </span>
+                    </td>
+
+                    {/* Contact */}
+                    <td className="py-4 px-6 font-medium text-slate-600">
+                      {coach.contact || "—"}
+                    </td>
+
+                    {/* Status Badge */}
+                    <td className="py-4 px-6">
+                      {coach.status === "Aktif" ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-emerald-100 bg-emerald-50 text-[10px] font-bold text-emerald-600">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                          {coach.status}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-rose-100 bg-rose-50 text-[10px] font-bold text-rose-600">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                          {coach.status}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-4 px-6 text-center">
+                      <div className="flex items-center justify-center gap-3">
+                        <Link href={`/dashboard/coach/profile?id=${coach.id}`} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition-all">
+                          <Eye className="w-4 h-4" />
+                        </Link>
+                        <Link href={`/dashboard/coach/edit?id=${coach.id}`} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all">
+                          <Pencil className="w-4 h-4" />
+                        </Link>
+                        <button 
+                          onClick={() => handleDelete(coach.id)}
+                          className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
         {/* Pagination Footer */}
-        <div className="p-5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="text-xs font-semibold text-slate-400">
-            Menampilkan 4 dari 24 Coach
-          </span>
-          
-          <div className="flex items-center gap-1">
-            {/* Prev */}
-            <button className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 text-slate-400">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
+        {!loading && coaches.length > 0 && (
+          <div className="p-5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <span className="text-xs font-semibold text-slate-400">
+              Menampilkan {startEntry} - {endEntry} dari {filteredTotal} Coach
+            </span>
             
-            {/* Page Buttons */}
-            <button className="w-8 h-8 rounded-lg bg-blue-600 text-white text-xs font-bold flex items-center justify-center shadow-sm">
-              1
-            </button>
-            <button className="w-8 h-8 rounded-lg hover:bg-slate-50 text-slate-600 text-xs font-semibold flex items-center justify-center">
-              2
-            </button>
-            <button className="w-8 h-8 rounded-lg hover:bg-slate-50 text-slate-600 text-xs font-semibold flex items-center justify-center">
-              3
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Prev */}
+              <button 
+                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 text-slate-400 disabled:opacity-50"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              
+              {/* Page Buttons */}
+              {Array.from({ length: totalPages }).map((_, i) => {
+                const pageNum = i + 1;
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center transition-all ${
+                      currentPage === pageNum
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "hover:bg-slate-50 text-slate-600 font-semibold"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
 
-            {/* Next */}
-            <button className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 text-slate-400">
-              <ChevronRight className="w-4 h-4" />
-            </button>
+              {/* Next */}
+              <button 
+                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 text-slate-400 disabled:opacity-50"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
 

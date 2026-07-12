@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Plus,
   Pencil,
@@ -20,9 +21,70 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
-export default function TeacherProfilePage() {
-  const subjects = ["Matematika", "IPA", "Pendidikan Pancasila"];
-  const classes = ["4-A", "4-C", "5-B", "6-A"];
+function TeacherProfileContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id") || "1";
+
+  const [teacher, setTeacher] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const handleDelete = async () => {
+    if (!confirm("Apakah Anda yakin ingin menghapus data guru ini?")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/teachers/${id}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        alert("Data guru berhasil dihapus!");
+        router.push("/dashboard/guru");
+      } else {
+        alert(data.message || "Gagal menghapus data guru");
+      }
+    } catch (err) {
+      console.error("Failed to delete teacher:", err);
+      alert("Terjadi kesalahan koneksi");
+    }
+  };
+
+  useEffect(() => {
+    async function fetchProfile() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/teachers/${id}`);
+        const json = await res.json();
+        if (json.success) {
+          setTeacher(json.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch teacher profile:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchProfile();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="py-20 text-center text-slate-400 font-bold">
+        Memuat profil guru...
+      </div>
+    );
+  }
+
+  if (!teacher) {
+    return (
+      <div className="py-20 text-center text-rose-500 font-bold">
+        Guru tidak ditemukan.
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -50,32 +112,39 @@ export default function TeacherProfilePage() {
             <div className="flex items-center gap-5">
               <div className="relative shrink-0">
                 <div className="w-24 h-24 rounded-2xl bg-blue-50 text-[#2563eb] border border-blue-100 shadow-md flex items-center justify-center font-extrabold text-2xl">
-                  BW
+                  {teacher.initials}
                 </div>
-                <span className="absolute -bottom-2 -right-2 bg-emerald-500 text-white font-bold text-[10px] px-2.5 py-0.5 rounded-full border-2 border-white shadow-sm">
-                  Aktif
+                <span className={`absolute -bottom-2 -right-2 font-bold text-[10px] px-2.5 py-0.5 rounded-full border-2 border-white shadow-sm ${
+                  teacher.status === "Aktif" 
+                    ? "bg-emerald-500 text-white" 
+                    : "bg-rose-500 text-white"
+                }`}>
+                  {teacher.status}
                 </span>
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <h2 className="text-xl font-extrabold text-slate-800">
-                  Bambang Wijaya, S.Pd.
+                  {teacher.name}
                 </h2>
                 <span className="text-xs font-bold text-blue-600">
-                  NIP: 19850312 201001 1 004
+                  NIP: {teacher.nip}
                 </span>
               </div>
             </div>
 
             {/* Actions Buttons */}
-            <div className="flex items-center gap-2 self-stretch sm:self-auto">
-              <Link href="/dashboard/guru/edit" className="flex-1 sm:flex-initial">
+            <div className="flex items-center gap-2 self-stretch sm:sm:self-auto">
+              <Link href={`/dashboard/guru/edit?id=${teacher.id}`} className="flex-1 sm:flex-initial">
                 <button className="w-full py-2 px-4 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs flex items-center justify-center gap-1.5 transition-all">
                   <Pencil className="w-3.5 h-3.5" />
                   Edit Profil
                 </button>
               </Link>
-              <button className="flex-1 sm:flex-initial py-2 px-4 rounded-xl border border-rose-100 bg-rose-50/50 hover:bg-rose-100/50 text-rose-600 font-bold text-xs flex items-center justify-center gap-1.5 transition-all">
+              <button 
+                onClick={handleDelete}
+                className="flex-1 sm:flex-initial py-2 px-4 rounded-xl border border-rose-100 bg-rose-50/50 hover:bg-rose-100/50 text-rose-600 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+              >
                 <Trash2 className="w-3.5 h-3.5" />
                 Hapus
               </button>
@@ -93,7 +162,7 @@ export default function TeacherProfilePage() {
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-extrabold text-slate-400 tracking-wider">EMAIL</span>
-                <span className="text-xs font-semibold text-slate-700 mt-1">bambang.wijaya@lumina.sch.id</span>
+                <span className="text-xs font-semibold text-slate-700 mt-1">{teacher.email}</span>
               </div>
             </div>
 
@@ -104,7 +173,7 @@ export default function TeacherProfilePage() {
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-extrabold text-slate-400 tracking-wider">NOMOR TELEPON</span>
-                <span className="text-xs font-semibold text-slate-700 mt-1">+62 812-3456-7890</span>
+                <span className="text-xs font-semibold text-slate-700 mt-1">{teacher.phone}</span>
               </div>
             </div>
 
@@ -115,7 +184,7 @@ export default function TeacherProfilePage() {
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-extrabold text-slate-400 tracking-wider">BERGABUNG SEJAK</span>
-                <span className="text-xs font-semibold text-slate-700 mt-1">15 Januari 2010</span>
+                <span className="text-xs font-semibold text-slate-700 mt-1">{teacher.joinDate}</span>
               </div>
             </div>
 
@@ -127,7 +196,7 @@ export default function TeacherProfilePage() {
               <div className="flex flex-col">
                 <span className="text-[10px] font-extrabold text-slate-400 tracking-wider">ALAMAT</span>
                 <span className="text-xs font-semibold text-slate-700 mt-1 leading-relaxed">
-                  Jl. Mentari Pagi No. 45, Kebayoran Lama, Jakarta Selatan
+                  {teacher.address}
                 </span>
               </div>
             </div>
@@ -146,16 +215,22 @@ export default function TeacherProfilePage() {
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">Status Wali Kelas</span>
-                <span className="text-base font-extrabold">Wali Kelas: Kelas 4–C</span>
+                <span className="text-base font-extrabold">
+                  {teacher.homeroomClass ? `Wali Kelas: ${teacher.homeroomClass}` : "Bukan Wali Kelas"}
+                </span>
               </div>
             </div>
 
             <div className="flex justify-between items-center border-t border-white/10 pt-4 mt-2">
-              <span className="text-xs font-medium text-blue-100">Bertanggung jawab atas 32 siswa</span>
-              <a href="#" className="text-xs font-bold text-white flex items-center gap-1.5">
-                Lihat Kelas
-                <ArrowRight className="w-3.5 h-3.5" />
-              </a>
+              <span className="text-xs font-medium text-blue-100">
+                {teacher.homeroomClass ? "Bertanggung jawab atas kelas binaan" : "Tidak mengampu rombel khusus"}
+              </span>
+              {teacher.homeroomClass && (
+                <Link href="/dashboard/kelas/detail" className="text-xs font-bold text-white flex items-center gap-1.5 hover:underline">
+                  Lihat Kelas
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              )}
             </div>
           </div>
 
@@ -170,15 +245,19 @@ export default function TeacherProfilePage() {
               </h3>
 
               <div className="flex flex-wrap gap-2">
-                {subjects.map((sub) => (
-                  <button
-                    key={sub}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-blue-100 bg-blue-50/50 hover:bg-blue-50 text-xs font-bold text-[#2563eb] transition-all"
-                  >
-                    {sub}
-                    <ExternalLink className="w-3 h-3 text-blue-400" />
-                  </button>
-                ))}
+                {teacher.subjects && teacher.subjects.length > 0 ? (
+                  teacher.subjects.map((sub: string) => (
+                    <button
+                      key={sub}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-blue-100 bg-blue-50/50 hover:bg-blue-50 text-xs font-bold text-[#2563eb] transition-all"
+                    >
+                      {sub}
+                      <ExternalLink className="w-3 h-3 text-blue-400" />
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-xs text-slate-400 font-semibold italic">Tidak ada mapel diampu</span>
+                )}
               </div>
             </div>
 
@@ -190,14 +269,18 @@ export default function TeacherProfilePage() {
               </h3>
 
               <div className="flex flex-wrap gap-2">
-                {classes.map((cls) => (
-                  <span
-                    key={cls}
-                    className="px-3.5 py-1.5 rounded-lg bg-slate-50 border border-slate-100 text-xs font-bold text-slate-600"
-                  >
-                    {cls}
-                  </span>
-                ))}
+                {teacher.classes && teacher.classes.length > 0 ? (
+                  teacher.classes.map((cls: string) => (
+                    <span
+                      key={cls}
+                      className="px-3.5 py-1.5 rounded-lg bg-slate-50 border border-slate-100 text-xs font-bold text-slate-600"
+                    >
+                      {cls}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-slate-400 font-semibold italic">Tidak ada kelas diampu</span>
+                )}
               </div>
             </div>
 
@@ -226,11 +309,11 @@ export default function TeacherProfilePage() {
 
             <div className="flex flex-col">
               <span className="text-xs font-semibold text-slate-400">Kehadiran Mengajar</span>
-              <span className="text-3xl font-extrabold text-slate-800 mt-2">98.4%</span>
+              <span className="text-3xl font-extrabold text-slate-800 mt-2">{teacher.attendanceRate}%</span>
             </div>
             
             <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-              <div style={{ width: "98.4%" }} className="h-full bg-emerald-500 rounded-full"></div>
+              <div style={{ width: `${teacher.attendanceRate}%` }} className="h-full bg-emerald-500 rounded-full"></div>
             </div>
           </div>
 
@@ -247,11 +330,11 @@ export default function TeacherProfilePage() {
 
             <div className="flex flex-col">
               <span className="text-xs font-semibold text-slate-400">Rata-rata Nilai Siswa</span>
-              <span className="text-3xl font-extrabold text-slate-800 mt-2">87.5</span>
+              <span className="text-3xl font-extrabold text-slate-800 mt-2">{teacher.averageScore}</span>
             </div>
 
             <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-              <div style={{ width: "87.5%" }} className="h-full bg-[#2563eb] rounded-full"></div>
+              <div style={{ width: `${teacher.averageScore}%` }} className="h-full bg-[#2563eb] rounded-full"></div>
             </div>
           </div>
 
@@ -272,5 +355,13 @@ export default function TeacherProfilePage() {
       </div>
 
     </div>
+  );
+}
+
+export default function TeacherProfilePage() {
+  return (
+    <Suspense fallback={<div className="py-20 text-center text-slate-400 font-bold">Memuat halaman...</div>}>
+      <TeacherProfileContent />
+    </Suspense>
   );
 }

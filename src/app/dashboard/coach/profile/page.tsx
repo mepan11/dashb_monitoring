@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Plus,
   Pencil,
@@ -12,17 +13,94 @@ import {
   MapPin,
   Dumbbell,
   Clock,
-  Star,
   ExternalLink,
   ArrowRight,
   TrendingUp,
-  LayoutGrid,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
-export default function CoachProfilePage() {
-  const days = ["Selasa", "Kamis"];
-  const locations = ["Lab Komputer 2", "Ruang Robotik"];
+interface Coach {
+  id: string;
+  name: string;
+  email: string;
+  idNumber: string;
+  specialization: string;
+  contact: string;
+  status: string;
+  attendanceRate: string;
+  schedule?: string;
+  location?: string;
+  initials: string;
+}
+
+function CoachProfileContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id") || "1";
+
+  const [coach, setCoach] = useState<Coach | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const days = coach?.schedule ? coach.schedule.split(",").map(d => d.trim()).filter(Boolean) : [];
+  const locations = coach?.location ? coach.location.split(",").map(l => l.trim()).filter(Boolean) : [];
+
+  useEffect(() => {
+    async function fetchCoach() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/coaches/${id}`);
+        const json = await res.json();
+        if (json.success) {
+          setCoach(json.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch coach details:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchCoach();
+  }, [id]);
+
+  const handleDelete = async () => {
+    if (!coach) return;
+    if (!confirm("Apakah Anda yakin ingin menghapus data coach ini?")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/coaches/${coach.id}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        alert("Data coach berhasil dihapus");
+        router.push("/dashboard/coach");
+      } else {
+        alert(data.message || "Gagal menghapus coach");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan koneksi");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="py-20 text-center text-slate-400 font-bold">
+        Memuat data coach...
+      </div>
+    );
+  }
+
+  if (!coach) {
+    return (
+      <div className="py-20 text-center text-slate-400 font-bold">
+        Coach tidak ditemukan.
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -50,32 +128,37 @@ export default function CoachProfilePage() {
             <div className="flex items-center gap-5">
               <div className="relative shrink-0">
                 <div className="w-24 h-24 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-md flex items-center justify-center font-extrabold text-2xl">
-                  AS
+                  {coach.initials}
                 </div>
-                <span className="absolute -bottom-2 -right-2 bg-emerald-500 text-white font-bold text-[10px] px-2.5 py-0.5 rounded-full border-2 border-white shadow-sm">
-                  Aktif
+                <span className={`absolute -bottom-2 -right-2 font-bold text-[10px] px-2.5 py-0.5 rounded-full border-2 border-white shadow-sm ${
+                  coach.status === "Aktif" ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"
+                }`}>
+                  {coach.status}
                 </span>
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <h2 className="text-xl font-extrabold text-slate-800">
-                  Ahmad Subardjo
+                  {coach.name}
                 </h2>
                 <span className="text-xs font-bold text-emerald-600">
-                  ID Number: LC-2024-001
+                  ID Number: {coach.idNumber}
                 </span>
               </div>
             </div>
 
             {/* Actions Buttons */}
             <div className="flex items-center gap-2 self-stretch sm:self-auto">
-              <Link href="/dashboard/coach/edit" className="flex-1 sm:flex-initial">
+              <Link href={`/dashboard/coach/edit?id=${coach.id}`} className="flex-1 sm:flex-initial">
                 <button className="w-full py-2 px-4 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs flex items-center justify-center gap-1.5 transition-all">
                   <Pencil className="w-3.5 h-3.5" />
                   Edit Profil
                 </button>
               </Link>
-              <button className="flex-1 sm:flex-initial py-2 px-4 rounded-xl border border-rose-100 bg-rose-50/50 hover:bg-rose-100/50 text-rose-600 font-bold text-xs flex items-center justify-center gap-1.5 transition-all">
+              <button 
+                onClick={handleDelete}
+                className="flex-1 sm:flex-initial py-2 px-4 rounded-xl border border-rose-100 bg-rose-50/50 hover:bg-rose-100/50 text-rose-600 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+              >
                 <Trash2 className="w-3.5 h-3.5" />
                 Hapus
               </button>
@@ -93,7 +176,7 @@ export default function CoachProfilePage() {
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-extrabold text-slate-400 tracking-wider">EMAIL</span>
-                <span className="text-xs font-semibold text-slate-700 mt-1">ahmad.s@lumina.sch.id</span>
+                <span className="text-xs font-semibold text-slate-700 mt-1">{coach.email}</span>
               </div>
             </div>
 
@@ -104,7 +187,7 @@ export default function CoachProfilePage() {
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-extrabold text-slate-400 tracking-wider">NOMOR TELEPON</span>
-                <span className="text-xs font-semibold text-slate-700 mt-1">+62 812-3456-7890</span>
+                <span className="text-xs font-semibold text-slate-700 mt-1">{coach.contact || "—"}</span>
               </div>
             </div>
 
@@ -146,12 +229,12 @@ export default function CoachProfilePage() {
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-[10px] font-bold text-emerald-100 uppercase tracking-wider">Spesialisasi Utama</span>
-                <span className="text-base font-extrabold">Robotik & Coding</span>
+                <span className="text-base font-extrabold">{coach.specialization}</span>
               </div>
             </div>
 
             <div className="flex justify-between items-center border-t border-white/10 pt-4 mt-2">
-              <span className="text-xs font-medium text-emerald-100">Melatih 20 siswa di program Robotik</span>
+              <span className="text-xs font-medium text-emerald-100">Melatih program {coach.specialization}</span>
               <a href="#" className="text-xs font-bold text-white flex items-center gap-1.5">
                 Lihat Program
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -170,15 +253,19 @@ export default function CoachProfilePage() {
               </h3>
 
               <div className="flex flex-wrap gap-2">
-                {days.map((day) => (
-                  <button
-                    key={day}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-emerald-100 bg-emerald-50/50 hover:bg-emerald-50 text-xs font-bold text-emerald-600 transition-all"
-                  >
-                    {day}
-                    <ExternalLink className="w-3 h-3 text-emerald-400" />
-                  </button>
-                ))}
+                {days.length > 0 ? (
+                  days.map((day) => (
+                    <button
+                      key={day}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-emerald-100 bg-emerald-50/50 hover:bg-emerald-50 text-xs font-bold text-emerald-600 transition-all"
+                    >
+                      {day}
+                      <ExternalLink className="w-3 h-3 text-emerald-400" />
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-xs text-slate-400 italic">Belum ada jadwal latihan</span>
+                )}
               </div>
             </div>
 
@@ -190,14 +277,18 @@ export default function CoachProfilePage() {
               </h3>
 
               <div className="flex flex-wrap gap-2">
-                {locations.map((loc) => (
-                  <span
-                    key={loc}
-                    className="px-3.5 py-1.5 rounded-lg bg-slate-50 border border-slate-100 text-xs font-bold text-slate-600"
-                  >
-                    {loc}
-                  </span>
-                ))}
+                {locations.length > 0 ? (
+                  locations.map((loc) => (
+                    <span
+                      key={loc}
+                      className="px-3.5 py-1.5 rounded-lg bg-slate-50 border border-slate-100 text-xs font-bold text-slate-600"
+                    >
+                      {loc}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-slate-400 italic">Belum ada lokasi latihan</span>
+                )}
               </div>
             </div>
 
@@ -211,7 +302,7 @@ export default function CoachProfilePage() {
       <div className="flex flex-col gap-4">
         <h2 className="text-lg font-bold text-slate-800">Ringkasan Kinerja Latihan</h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
           {/* Card 1: Tingkat Kehadiran */}
           <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col justify-between gap-6">
@@ -226,45 +317,11 @@ export default function CoachProfilePage() {
 
             <div className="flex flex-col">
               <span className="text-xs font-semibold text-slate-400">Tingkat Kehadiran</span>
-              <span className="text-3xl font-extrabold text-slate-800 mt-2">96.5%</span>
+              <span className="text-3xl font-extrabold text-slate-800 mt-2">{coach.attendanceRate}%</span>
             </div>
             
             <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-              <div style={{ width: "96.5%" }} className="h-full bg-emerald-500 rounded-full"></div>
-            </div>
-          </div>
-
-          {/* Card 2: Kepuasan Siswa */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col justify-between gap-6">
-            <div className="flex justify-between items-center">
-              <div className="p-2.5 rounded-lg bg-blue-50 text-[#2563eb]">
-                <Star className="w-5 h-5 fill-blue-500 text-blue-500" />
-              </div>
-              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-blue-50 text-[#2563eb]">
-                Sangat Baik
-              </span>
-            </div>
-
-            <div className="flex flex-col">
-              <span className="text-xs font-semibold text-slate-400">Kepuasan Siswa</span>
-              <span className="text-3xl font-extrabold text-slate-800 mt-2">4.8 / 5.0</span>
-            </div>
-
-            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-              <div style={{ width: "96%" }} className="h-full bg-[#2563eb] rounded-full"></div>
-            </div>
-          </div>
-
-          {/* Card 3: Tambah Widget Analisis (Dotted Card) */}
-          <div className="bg-[#f4f7fc]/30 border-2 border-dashed border-slate-200/80 rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-4 cursor-pointer hover:bg-slate-100/30 transition-all min-h-[180px]">
-            <div className="p-2 rounded-xl bg-blue-50 border border-blue-100 text-[#2563eb] shadow-sm shrink-0">
-              <LayoutGrid className="w-5 h-5 stroke-[2]" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-slate-500">Tambah Widget Analisis</span>
-              <button className="text-xs font-extrabold text-[#2563eb] hover:text-blue-700 mt-2">
-                Konfigurasi
-              </button>
+              <div style={{ width: `${coach.attendanceRate}%` }} className="h-full bg-emerald-500 rounded-full"></div>
             </div>
           </div>
 
@@ -272,5 +329,13 @@ export default function CoachProfilePage() {
       </div>
 
     </div>
+  );
+}
+
+export default function CoachProfilePage() {
+  return (
+    <Suspense fallback={<div className="py-20 text-center text-slate-400 font-bold">Memuat Halaman...</div>}>
+      <CoachProfileContent />
+    </Suspense>
   );
 }

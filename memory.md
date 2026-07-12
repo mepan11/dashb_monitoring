@@ -1440,6 +1440,27 @@ Formulir pengaturan administrasi keamanan untuk mereset dan mengganti kata sandi
     }
     ```
 
+---
+
+## 34. Skema Database Relasional Proyek (dashb_monitoring Schema)
+
+Dokumentasi rancangan skema database MySQL (`dashb_monitoring`) lengkap dengan detail tabel-tabel utama yang merepresentasikan struktur data aplikasi SD Islam Baiturrachman.
+
+### Detail Struktur Tabel & Relasi
+1. **users**: Mengelola credentials dan otorisasi akses pengguna ke sistem dashboard (`admin`, `teacher`, `coach`, `parent`).
+2. **teachers**: Menyimpan informasi guru, NIP, spesialisasi, dan status keaktifan mengajar.
+3. **coaches**: Menyimpan detail data pembimbing / coach ekstrakurikuler serta spesialisasi bidang dan kontaknya.
+4. **students**: Menyimpan biodata murid (Nama, gender, NISN, status, dan label kelas).
+5. **classes**: Mengelola rombongan belajar (Kelas) lengkap dengan relasi guru wali kelas (Foreign Key ke `teachers.id`), tahun akademik, semester, dan kapasitas tampung.
+6. **subjects**: Menyimpan daftar mata pelajaran akademik (English, Matematika, IPA, dll.).
+7. **class_subjects**: Tabel relasional penghubung pemetaan mata pelajaran yang diajarkan pada suatu kelas beserta guru pengampunya.
+8. **teacher_attendance** / **coach_attendance** / **student_attendance**: Log historis kehadiran harian guru, coach, dan siswa dengan status terkait (`Hadir`, `Terlambat`, `Izin`, `Absen`).
+9. **grades**: Mengelola rekapitulasi penilaian harian tugas, nilai UTS, UAS, nilai ekstrakurikuler, rata-rata, dan kelulusan siswa.
+10. **extracurriculars**: Data program minat bakat (Robotik, Sepak Bola, Seni Lukis) dan jadwal serta pelatih utamanya.
+11. **extracurricular_students**: Tabel relasional pendaftaran murid ke program ekstrakurikuler tertentu beserta status keaktifannya.
+12. **activity_logs**: Pencatatan log historis audit trail aktivitas penambahan atau perubahan data oleh admin sekolah.
+
+
 
 
 

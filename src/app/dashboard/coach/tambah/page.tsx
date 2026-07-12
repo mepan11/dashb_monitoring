@@ -5,39 +5,67 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Save,
-  Info,
   User,
   Mail,
-  Phone,
-  BookOpen,
-  Camera,
-  CheckCircle2,
   Calendar,
   Lightbulb,
-  Upload,
-  Loader2,
+  CheckCircle2,
+  Clock,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 
 export default function TambahCoachPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [nik, setNik] = useState("");
-  const [gender, setGender] = useState("");
-  const [birthPlace, setBirthPlace] = useState("");
-  const [birthDate, setBirthDate] = useState("");
+  const [gender, setGender] = useState("L");
+  const [birthPlace, setBirthPlace] = useState("Jakarta");
+  const [birthDate, setBirthDate] = useState("1995-01-01");
   const [address, setAddress] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [specialization, setSpecialization] = useState("");
+  const [specialization, setSpecialization] = useState("Sains");
   const [ekskul, setEkskul] = useState("");
+  const [schedule, setSchedule] = useState("Selasa, Kamis");
+  const [location, setLocation] = useState("Lab Komputer 2, Ruang Robotik");
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Data Coach Berhasil Disimpan!");
-    router.push("/dashboard/coach");
+    try {
+      const response = await fetch("/api/coaches", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          idNumber: nik,
+          specialization: ekskul || specialization,
+          contact: phone,
+          status: "Aktif",
+          schedule,
+          location,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        alert("Data Coach Berhasil Disimpan!");
+        router.push("/dashboard/coach");
+      } else {
+        alert(data.message || "Gagal menyimpan data coach");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan koneksi");
+    }
   };
+
+  const initials = name.split(" ").length >= 2
+    ? `${name.split(" ")[0][0]}${name.split(" ")[1][0]}`.toUpperCase()
+    : `${name[0] || "C"}`.toUpperCase();
 
   return (
     <div className="flex flex-col gap-8">
@@ -97,7 +125,6 @@ export default function TambahCoachPage() {
                   required
                   className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
                 >
-                  <option value="">Pilih Jenis Kelamin</option>
                   <option value="L">Laki-laki</option>
                   <option value="P">Perempuan</option>
                 </select>
@@ -181,42 +208,51 @@ export default function TambahCoachPage() {
             </div>
           </div>
 
-          {/* Card 3: Penugasan Coach */}
+          {/* Card 3: Penugasan & Hari Latihan */}
           <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-5">
             <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
               <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
-                <BookOpen className="w-4 h-4" />
+                <Clock className="w-4 h-4" />
               </div>
-              Penugasan Coach
+              Penugasan Ekskul, Jadwal & Lokasi
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Spesialisasi</label>
-                <select
-                  value={specialization}
-                  onChange={(e) => setSpecialization(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
-                >
-                  <option value="">Pilih Spesialisasi</option>
-                  <option value="Sains">Sains (Robotik, Coding, dll)</option>
-                  <option value="Olahraga">Olahraga (Futsal, Basket, dll)</option>
-                  <option value="Seni">Seni (Tari, Lukis, dll)</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Bidang Ekskul yang Diampu</label>
                 <input
                   type="text"
-                  placeholder="Contoh: Robotik, Futsal, Tari Tradisional"
+                  placeholder="Contoh: Robotik, Sepak Bola, Seni Lukis"
                   value={ekskul}
                   onChange={(e) => setEkskul(e.target.value)}
                   required
                   className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
                 />
               </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Hari Latihan</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Selasa, Kamis"
+                  value={schedule}
+                  onChange={(e) => setSchedule(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Lokasi Latihan</label>
+              <input
+                type="text"
+                placeholder="Contoh: Lab Komputer 2, Ruang Robotik"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                required
+                className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+              />
             </div>
           </div>
 
@@ -237,31 +273,23 @@ export default function TambahCoachPage() {
 
         </form>
 
-        {/* Right Column (Foto Profil & Status Pendaftaran) */}
+        {/* Right Column */}
         <div className="w-full lg:w-[360px] flex flex-col gap-6 shrink-0">
           
           {/* Card 1: Foto Profil Coach */}
           <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-6">
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Foto Profil Coach</h4>
 
-            {/* Avatar display */}
             <div className="flex flex-col items-center justify-center gap-4">
-              <div className="w-24 h-24 rounded-full bg-blue-50 text-[#2563eb] border border-blue-100 shadow-inner flex items-center justify-center">
-                <User className="w-10 h-10 stroke-[1.5]" />
+              <div className="w-24 h-24 rounded-full bg-blue-50 text-[#2563eb] border border-blue-100 shadow-inner flex items-center justify-center font-bold text-2xl">
+                {initials || "C"}
               </div>
-              
-              <p className="text-[10px] text-slate-400 leading-normal text-center px-4 font-semibold">
-                Unggah foto formal dengan latar belakang polos. Format .jpg atau .png (Maks. 2MB)
-              </p>
-
-              <button
-                type="button"
-                className="w-full py-2.5 px-4 rounded-xl border-2 border-dashed border-blue-200 text-[#2563eb] hover:bg-blue-50/50 font-bold text-xs flex items-center justify-center gap-1.5 transition-all bg-white"
-              >
-                <Upload className="w-4 h-4" />
-                Pilih File Foto
-              </button>
+              <span className="text-xs font-bold text-[#2563eb] hover:underline cursor-pointer">Ganti Foto Profil</span>
             </div>
+            
+            <p className="text-[10px] text-slate-400 leading-normal text-center px-4 font-semibold">
+              Unggah foto formal dengan latar belakang polos. Format .jpg atau .png (Maks. 2MB)
+            </p>
 
             {/* Tips Box */}
             <div className="bg-emerald-50/20 rounded-xl p-4 border border-emerald-50 flex flex-col gap-3">
@@ -283,46 +311,6 @@ export default function TambahCoachPage() {
                   Pencahayaan yang cukup.
                 </li>
               </ul>
-            </div>
-          </div>
-
-          {/* Card 2: Status Pendaftaran */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-6">
-            <div className="flex items-center justify-between text-xs font-bold">
-              <span className="text-slate-700 font-extrabold text-sm">Status Pendaftaran</span>
-              <span className="text-[#2563eb]">45%</span>
-            </div>
-
-            {/* Progress bar */}
-            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-              <div style={{ width: "45%" }} className="h-full bg-[#2563eb] rounded-full"></div>
-            </div>
-
-            {/* Steps Checklist */}
-            <div className="flex flex-col gap-3.5 mt-2">
-              {/* Step 1 */}
-              <div className="flex items-center justify-between text-xs font-bold text-slate-600">
-                <span className="text-slate-400 font-semibold">Biodata Pribadi</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 fill-emerald-50" />
-              </div>
-
-              {/* Step 2 */}
-              <div className="flex items-center justify-between text-xs font-bold text-slate-600">
-                <span className="text-slate-400 font-semibold">Informasi Kontak</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 fill-emerald-50" />
-              </div>
-
-              {/* Step 3 */}
-              <div className="flex items-center justify-between text-xs font-bold text-[#2563eb]">
-                <span>Kredensial Akun</span>
-                <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
-              </div>
-
-              {/* Step 4 */}
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
-                <span>Penugasan Coach</span>
-                <span className="w-4 h-4 rounded-full border-2 border-slate-200 shrink-0"></span>
-              </div>
             </div>
           </div>
 

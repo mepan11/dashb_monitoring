@@ -1,17 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Save,
-  Info,
   User,
   Mail,
   Phone,
-  BookOpen,
-  Camera,
-  CheckCircle2,
   Calendar,
   X,
   Plus,
@@ -19,26 +15,93 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
-export default function EditGuruPage() {
+function EditGuruContent() {
   const router = useRouter();
-  const [name, setName] = useState("Bambang Wijaya, S.Pd.");
-  const [nip, setNip] = useState("19850312 201001 1 004");
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id") || "1";
+
+  const [name, setName] = useState("");
+  const [nip, setNip] = useState("");
   const [birthPlace, setBirthPlace] = useState("Jakarta");
   const [birthDate, setBirthDate] = useState("1985-03-12");
   const [gender, setGender] = useState("L");
-  const [address, setAddress] = useState("Jl. Mentari Pagi No. 45, Kebayoran Lama, Jakarta Selatan");
-  const [email, setEmail] = useState("bambang.wijaya@lumina.sch.id");
-  const [phone, setPhone] = useState("+62 812-3456-7890");
-  const [isHomeroom, setIsHomeroom] = useState(true);
-  const [homeroomClass, setHomeroomClass] = useState("4-C");
+  const [address, setAddress] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  
+  const [isHomeroom, setIsHomeroom] = useState(false);
+  const [homeroomClass, setHomeroomClass] = useState("Kelas 4-C");
 
-  const [subjects, setSubjects] = useState(["Matematika", "IPA", "Pendidikan Pancasila"]);
-  const [classes, setClasses] = useState(["4-A", "4-C", "5-B", "6-A"]);
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [classes, setClasses] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleSave = (e: React.FormEvent) => {
+  // Dynamic dropdown addition states
+  const [showAddSubject, setShowAddSubject] = useState(false);
+  const [showAddClass, setShowAddClass] = useState(false);
+
+  const availableSubjectsList = ["Matematika", "Bahasa Inggris", "Ilmu Pengetahuan Alam"];
+  const availableClassesList = ["Kelas 4-C", "Kelas 5-B", "Kelas 6-A"];
+
+  useEffect(() => {
+    async function fetchTeacher() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/teachers/${id}`);
+        const json = await res.json();
+        if (json.success) {
+          const t = json.data;
+          setName(t.name);
+          setNip(t.nip);
+          setEmail(t.email);
+          setPhone(t.phone);
+          setAddress(t.address);
+          setSubjects(t.subjects || []);
+          setClasses(t.classes || []);
+          setIsHomeroom(!!t.homeroomClass);
+          if (t.homeroomClass) {
+            setHomeroomClass(t.homeroomClass);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch teacher details:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchTeacher();
+  }, [id]);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Perubahan Data Guru Berhasil Disimpan!");
-    router.push("/dashboard/guru/profile");
+    try {
+      const response = await fetch(`/api/teachers/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          nip,
+          isHomeroom,
+          homeroomClass: isHomeroom ? homeroomClass : null,
+          subjects,
+          classes,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        alert("Perubahan Data Guru Berhasil Disimpan!");
+        router.push(`/dashboard/guru/profile?id=${id}`);
+      } else {
+        alert(data.message || "Gagal memperbarui data guru");
+      }
+    } catch (err) {
+      console.error("Failed to save changes:", err);
+      alert("Terjadi kesalahan koneksi");
+    }
   };
 
   const handleRemoveSubject = (sub: string) => {
@@ -48,6 +111,14 @@ export default function EditGuruPage() {
   const handleRemoveClass = (cls: string) => {
     setClasses(classes.filter((c) => c !== cls));
   };
+
+  if (loading) {
+    return (
+      <div className="py-20 text-center text-slate-400 font-bold">
+        Memuat data guru...
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -62,7 +133,7 @@ export default function EditGuruPage() {
 
         {/* Top actions */}
         <div className="flex items-center gap-3 self-stretch xl:self-auto">
-          <Link href="/dashboard/guru/profile" className="flex-1 xl:flex-initial">
+          <Link href={`/dashboard/guru/profile?id=${id}`} className="flex-1 xl:flex-initial">
             <Button variant="secondary" className="!py-2.5 !px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold rounded-lg w-full">
               Batal
             </Button>
@@ -151,235 +222,190 @@ export default function EditGuruPage() {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 rows={3}
-                className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm resize-none"
-              ></textarea>
+                className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+              />
             </div>
           </div>
 
           {/* Card 2: Informasi Kontak */}
           <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-6">
             <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
+              <div className="p-1.5 rounded-lg bg-blue-50 text-[#2563eb]">
                 <Mail className="w-4 h-4" />
               </div>
               Informasi Kontak
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-slate-700">Alamat Email *</label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                    <Mail className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="email"
-                    placeholder="nama.guru@edusmart.ac.id"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="w-full pl-9 pr-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
-                  />
-                </div>
-              </div>
+              <Input
+                label="Alamat Email Instansi *"
+                type="email"
+                placeholder="contoh@sekolah.sch.id"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
 
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-slate-700">Nomor Telepon/WhatsApp *</label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                    <Phone className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="+62 8xx xxxx xxxx"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    required
-                    className="w-full pl-9 pr-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
-                  />
-                </div>
-              </div>
+              <Input
+                label="Nomor Telepon Seluler *"
+                type="tel"
+                placeholder="+62 8xx-xxxx-xxxx"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+              />
             </div>
           </div>
+        </form>
 
-          {/* Card 3: Penugasan Pengajar */}
+        {/* Right Column: Penugasan Akademik (Mapel & Rombel) */}
+        <div className="w-full lg:w-[380px] flex flex-col gap-6 shrink-0">
           <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-6">
-            <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-amber-50 text-amber-600">
-                <BookOpen className="w-4 h-4" />
-              </div>
-              Penugasan Pengajar
+            <h3 className="text-sm font-bold text-slate-700 border-b border-slate-100 pb-4">
+              Penugasan Akademik
             </h3>
 
-            {/* Mapel diampu */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-slate-700">Mata Pelajaran Diampu *</label>
-              <div className="flex flex-wrap items-center gap-2 p-3 bg-[#f8fafc] rounded-xl border border-slate-100 min-h-[50px]">
+            {/* Checkbox Homeroom */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-600">Sebagai Wali Kelas?</span>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isHomeroom}
+                  onChange={(e) => setIsHomeroom(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            {/* Select Homeroom Class */}
+            {isHomeroom && (
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-slate-700">Wali Kelas Untuk Kelas</label>
+                <select
+                  value={homeroomClass}
+                  onChange={(e) => setHomeroomClass(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                >
+                  <option value="Kelas 4-C">Kelas 4-C</option>
+                  <option value="Kelas 5-B">Kelas 5-B</option>
+                  <option value="Kelas 6-A">Kelas 6-A</option>
+                </select>
+              </div>
+            )}
+
+            {/* Subjects diampu list */}
+            <div className="flex flex-col gap-3 border-t border-slate-100 pt-5">
+              <span className="text-xs font-bold text-slate-600">Mata Pelajaran Diampu</span>
+              <div className="flex flex-wrap gap-2">
                 {subjects.map((sub) => (
                   <span
                     key={sub}
-                    className="flex items-center gap-1.5 px-3 py-1 bg-blue-600 text-white rounded-full text-xs font-semibold shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-50 text-[#2563eb] text-xs font-bold border border-blue-100"
                   >
                     {sub}
-                    <button type="button" onClick={() => handleRemoveSubject(sub)} className="hover:text-blue-100">
-                      <X className="w-3.5 h-3.5" />
+                    <button type="button" onClick={() => handleRemoveSubject(sub)} className="p-0.5 hover:bg-blue-100 rounded text-blue-500">
+                      <X className="w-3 h-3" />
                     </button>
                   </span>
                 ))}
-                <button
-                  type="button"
-                  className="flex items-center gap-1 px-3 py-1 border border-dashed border-blue-300 text-blue-600 rounded-full text-xs font-semibold bg-white hover:bg-blue-50/50 transition-all"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Tambah Mapel
-                </button>
+
+                {showAddSubject ? (
+                  <select
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val && !subjects.includes(val)) {
+                        setSubjects([...subjects, val]);
+                      }
+                      setShowAddSubject(false);
+                    }}
+                    onBlur={() => setShowAddSubject(false)}
+                    className="px-3 py-1 rounded-lg border border-slate-200 bg-white text-xs text-slate-600 focus:outline-none"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Pilih Mapel</option>
+                    {availableSubjectsList
+                      .filter((s) => !subjects.includes(s))
+                      .map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                  </select>
+                ) : (
+                  <button 
+                    type="button"
+                    onClick={() => setShowAddSubject(true)}
+                    className="flex items-center gap-1 px-3 py-1 rounded-lg border border-dashed border-slate-300 hover:bg-slate-50 text-slate-500 text-xs font-bold transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Tambah
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Kelas diampu */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-slate-700">Kelas Diampu</label>
-              <div className="flex flex-wrap items-center gap-2 p-3 bg-[#f8fafc] rounded-xl border border-slate-100 min-h-[50px]">
+            {/* Classes diampu list */}
+            <div className="flex flex-col gap-3 border-t border-slate-100 pt-5">
+              <span className="text-xs font-bold text-slate-600">Rombel Kelas Yang Diampu</span>
+              <div className="flex flex-wrap gap-2">
                 {classes.map((cls) => (
                   <span
                     key={cls}
-                    className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 text-white rounded-full text-xs font-semibold shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-50 text-slate-600 text-xs font-bold border border-slate-200"
                   >
                     {cls}
-                    <button type="button" onClick={() => handleRemoveClass(cls)} className="hover:text-emerald-100">
-                      <X className="w-3.5 h-3.5" />
+                    <button type="button" onClick={() => handleRemoveClass(cls)} className="p-0.5 hover:bg-slate-200 rounded text-slate-400">
+                      <X className="w-3 h-3" />
                     </button>
                   </span>
                 ))}
-                <button
-                  type="button"
-                  className="flex items-center gap-1 px-3 py-1 border border-dashed border-emerald-300 text-emerald-600 rounded-full text-xs font-semibold bg-white hover:bg-emerald-50/50 transition-all"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Pilih Kelas
-                </button>
-              </div>
-            </div>
 
-            {/* Set Wali Kelas */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-t border-slate-100 pt-5">
-              <div className="flex items-center gap-3">
-                {/* Custom toggle button */}
-                <button
-                  type="button"
-                  onClick={() => setIsHomeroom(!isHomeroom)}
-                  className={`w-11 h-6 rounded-full transition-all relative ${
-                    isHomeroom ? "bg-[#2563eb]" : "bg-slate-200"
-                  }`}
-                >
-                  <span
-                    className={`w-5 h-5 rounded-full bg-white absolute top-0.5 shadow transition-all ${
-                      isHomeroom ? "left-5.5" : "left-0.5"
-                    }`}
-                  ></span>
-                </button>
-                <span className="text-sm font-semibold text-slate-700">Set Sebagai Wali Kelas?</span>
+                {showAddClass ? (
+                  <select
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val && !classes.includes(val)) {
+                        setClasses([...classes, val]);
+                      }
+                      setShowAddClass(false);
+                    }}
+                    onBlur={() => setShowAddClass(false)}
+                    className="px-3 py-1 rounded-lg border border-slate-200 bg-white text-xs text-slate-600 focus:outline-none"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Pilih Kelas</option>
+                    {availableClassesList
+                      .filter((c) => !classes.includes(c))
+                      .map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                  </select>
+                ) : (
+                  <button 
+                    type="button"
+                    onClick={() => setShowAddClass(true)}
+                    className="flex items-center gap-1 px-3 py-1 rounded-lg border border-dashed border-slate-300 hover:bg-slate-50 text-slate-500 text-xs font-bold transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Tambah
+                  </button>
+                )}
               </div>
-
-              <select
-                disabled={!isHomeroom}
-                value={homeroomClass}
-                onChange={(e) => setHomeroomClass(e.target.value)}
-                className="w-full sm:w-48 px-4 py-2.5 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <option value="">Pilih Kelas Wali</option>
-                <option value="4-C">Kelas 4-C</option>
-                <option value="1-A">Kelas 1-A</option>
-                <option value="2-C">Kelas 2-C</option>
-              </select>
             </div>
 
           </div>
-
-        </form>
-
-        {/* Right Column (Foto Profil & Status Pendaftaran) */}
-        <div className="w-full lg:w-[360px] flex flex-col gap-6 shrink-0">
-          
-          {/* Card 1: Foto Profil Guru */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-6">
-            <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-blue-50 text-[#2563eb]">
-                <Camera className="w-4 h-4" />
-              </div>
-              Foto Profil Guru
-            </h3>
-
-            {/* Avatar display since it's Edit mode */}
-            <div className="border-2 border-dashed border-slate-200 rounded-2xl py-8 px-6 flex flex-col items-center justify-center text-center gap-4 bg-[#f8fafc]/50">
-              <div className="w-20 h-20 rounded-2xl bg-blue-100 text-[#2563eb] border border-blue-200 shadow-md flex items-center justify-center font-extrabold text-xl">
-                BW
-              </div>
-              <span className="text-xs font-bold text-[#2563eb] hover:underline cursor-pointer">Ganti Foto Profil</span>
-            </div>
-            
-            <p className="text-[10px] text-slate-400 leading-normal text-center px-4 font-medium">
-              Gunakan format .jpg atau .png. Ukuran maksimal 2MB dengan rasio 1:1.
-            </p>
-
-            {/* Tips Box */}
-            <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-50 flex flex-col gap-3">
-              <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                <Info className="w-4 h-4 text-[#2563eb]" />
-                Tips Unggahan
-              </h4>
-              <ul className="list-disc pl-5 text-[10px] font-bold text-slate-500 flex flex-col gap-1.5">
-                <li>Pastikan wajah terlihat jelas</li>
-                <li>Gunakan latar belakang polos</li>
-                <li>Pencahayaan yang cukup</li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Card 2: Status Data */}
-          <div className="bg-[#f4f7fc]/50 border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-6">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-              <h3 className="text-sm font-extrabold text-slate-700">Kelengkapan Form</h3>
-            </div>
-
-            {/* Progress kelengkapan */}
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between text-xs font-bold">
-                <span className="text-slate-400">Kelengkapan Data</span>
-                <span className="text-emerald-600">100%</span>
-              </div>
-              <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                <div style={{ width: "100%" }} className="h-full bg-emerald-500 rounded-full"></div>
-              </div>
-            </div>
-
-            {/* Steps Checklist */}
-            <div className="flex flex-col gap-3 mt-2">
-              {/* Step 1 */}
-              <div className="flex items-center gap-2.5 text-xs font-bold text-emerald-600">
-                <CheckCircle2 className="w-4 h-4 fill-emerald-55 text-white" />
-                <span>Biodata Pribadi lengkap</span>
-              </div>
-
-              {/* Step 2 */}
-              <div className="flex items-center gap-2.5 text-xs font-bold text-emerald-600">
-                <CheckCircle2 className="w-4 h-4 fill-emerald-55 text-white" />
-                <span>Kontak lengkap</span>
-              </div>
-
-              {/* Step 3 */}
-              <div className="flex items-center gap-2.5 text-xs font-bold text-emerald-600">
-                <CheckCircle2 className="w-4 h-4 fill-emerald-55 text-white" />
-                <span>Penugasan aktif</span>
-              </div>
-            </div>
-          </div>
-
         </div>
 
       </div>
 
     </div>
+  );
+}
+
+export default function EditGuruPage() {
+  return (
+    <Suspense fallback={<div className="py-20 text-center text-slate-400 font-bold">Memuat halaman...</div>}>
+      <EditGuruContent />
+    </Suspense>
   );
 }

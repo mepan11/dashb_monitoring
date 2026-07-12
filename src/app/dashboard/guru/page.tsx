@@ -33,15 +33,42 @@ interface Teacher {
 }
 
 export default function GuruPage() {
-  const [selectedJenjang, setSelectedJenjang] = useState("Semua Jenjang");
   const [selectedMapel, setSelectedMapel] = useState("Semua Mata Pelajaran");
   const [selectedStatus, setSelectedStatus] = useState("Status: Aktif");
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [statsData, setStatsData] = useState({ total: 0, active: 0, akademik: 0, nonAkademik: 0 });
+  const [filteredTotal, setFilteredTotal] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [limit] = useState(5);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    async function fetchTeachers() {
+      setLoading(true);
+      try {
+        const cleanStatus = selectedStatus === "Status: Aktif" ? "Aktif" : "Nonaktif";
+        const mapelQuery = selectedMapel === "Semua Mata Pelajaran" ? "" : `&subject=${encodeURIComponent(selectedMapel)}`;
+        const res = await fetch(`/api/teachers?status=${cleanStatus}&page=${currentPage}&limit=${limit}${mapelQuery}`);
+        const data = await res.json();
+        if (data.success) {
+          setTeachers(data.data);
+          setStatsData(data.stats);
+          setFilteredTotal(data.filteredTotal || 0);
+        }
+      } catch (err) {
+        console.error("Failed to fetch teachers:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchTeachers();
+  }, [selectedStatus, currentPage, limit, selectedMapel]);
 
   // KPI Data
   const stats = [
     {
       title: "Total Guru",
-      value: 42,
+      value: statsData.total,
       badge: "+4 MoM",
       badgeType: "success" as const,
       icon: Users,
@@ -50,80 +77,63 @@ export default function GuruPage() {
     },
     {
       title: "Aktif",
-      value: 38,
+      value: statsData.active,
       icon: CheckCircle,
       iconBg: "bg-emerald-50",
       iconColor: "text-emerald-600",
     },
     {
       title: "Akademik",
-      value: 30,
+      value: statsData.akademik,
       icon: BookOpen,
       iconBg: "bg-amber-50/70",
       iconColor: "text-amber-600",
     },
     {
       title: "Non-Akademik",
-      value: 12,
+      value: statsData.nonAkademik,
       icon: Palette,
       iconBg: "bg-slate-100",
       iconColor: "text-slate-600",
     },
   ];
 
-  // Dummy Teachers Data
-  const teachers: Teacher[] = [
-    {
-      id: "1",
-      name: "Budi Santoso, S.Pd.",
-      email: "budi.santoso@lumina.sch.id",
-      nip: "198501012010011002",
-      specialization: "Akademik",
-      subjects: "Matematika, IPA",
-      classes: "4A, 4B, 4C",
-      status: "Aktif",
-      initials: "BS",
-    },
-    {
-      id: "2",
-      name: "Siti Aminah, M.Pd.",
-      email: "siti.aminah@lumina.sch.id",
-      nip: "198812152015032001",
-      specialization: "Akademik",
-      subjects: "Bahasa Indonesia",
-      classes: "1A, 1B",
-      status: "Aktif",
-      initials: "SA",
-    },
-    {
-      id: "3",
-      name: "Rian Hidayat, S.Or.",
-      email: "rian.hidayat@lumina.sch.id",
-      nip: "199205202018021005",
-      specialization: "Non-Akademik",
-      subjects: "PJOK (Olahraga)",
-      classes: "All Grades",
-      status: "Aktif",
-      initials: "RH",
-    },
-    {
-      id: "4",
-      name: "Dewi Lestari, S.Sn.",
-      email: "dewi.lestari@lumina.sch.id",
-      nip: "199008122016012003",
-      specialization: "Non-Akademik",
-      subjects: "Seni Budaya",
-      classes: "3, 4, 5",
-      status: "Aktif",
-      initials: "DL",
-    },
-  ];
-
   const handleResetFilters = () => {
-    setSelectedJenjang("Semua Jenjang");
     setSelectedMapel("Semua Mata Pelajaran");
     setSelectedStatus("Status: Aktif");
   };
+
+  const handleDelete = async (teacherId: string) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus data guru ini?")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/teachers/${teacherId}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        alert("Data guru berhasil dihapus!");
+        setTeachers(teachers.filter((t) => t.id !== teacherId));
+        setStatsData((prev) => ({
+          ...prev,
+          total: Math.max(0, prev.total - 1),
+          active: prev.active - 1,
+        }));
+      } else {
+        alert(data.message || "Gagal menghapus data guru");
+      }
+    } catch (err) {
+      console.error("Failed to delete teacher:", err);
+      alert("Terjadi kesalahan koneksi");
+    }
+  };
+
+  const totalPages = Math.ceil(filteredTotal / limit);
+  const startEntry = filteredTotal === 0 ? 0 : (currentPage - 1) * limit + 1;
+  const endEntry = Math.min(currentPage * limit, filteredTotal);
 
   return (
     <div className="flex flex-col gap-8">
@@ -180,21 +190,6 @@ export default function GuruPage() {
               Filter:
             </div>
 
-            {/* Dropdown 1 */}
-            <div className="relative">
-              <select
-                value={selectedJenjang}
-                onChange={(e) => setSelectedJenjang(e.target.value)}
-                className="appearance-none bg-white border border-slate-200/80 rounded-lg px-4 py-2 pr-10 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
-              >
-                <option>Semua Jenjang</option>
-                <option>SD</option>
-                <option>SMP</option>
-                <option>SMA</option>
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-
             {/* Dropdown 2 */}
             <div className="relative">
               <select
@@ -204,10 +199,8 @@ export default function GuruPage() {
               >
                 <option>Semua Mata Pelajaran</option>
                 <option>Matematika</option>
-                <option>Bahasa Indonesia</option>
-                <option>IPA</option>
-                <option>Seni Budaya</option>
-                <option>PJOK</option>
+                <option>Bahasa Inggris</option>
+                <option>Ilmu Pengetahuan Alam</option>
               </select>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
@@ -250,76 +243,98 @@ export default function GuruPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-              {teachers.map((teacher) => (
-                <tr key={teacher.id} className="hover:bg-slate-50/50 transition-all">
-                  
-                  {/* Name and Email */}
-                  <td className="py-4 px-6 flex items-center gap-3">
-                    {/* Initials Avatar */}
-                    <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 font-bold flex items-center justify-center border border-blue-100 shadow-sm shrink-0">
-                      {teacher.initials}
-                    </div>
-                    <div className="flex flex-col">
-                      <Link href="/dashboard/guru/profile" className="font-bold text-slate-800 hover:text-[#2563eb] transition-all">
-                        {teacher.name}
-                      </Link>
-                      <span className="text-[10px] text-slate-400 mt-0.5">{teacher.email}</span>
-                    </div>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-slate-400 font-bold">
+                    Memuat data guru...
                   </td>
-
-                  {/* NIP */}
-                  <td className="py-4 px-6 font-medium text-slate-500">
-                    {teacher.nip}
-                  </td>
-
-                  {/* Specialization */}
-                  <td className="py-4 px-6">
-                    <span
-                      className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${
-                        teacher.specialization === "Akademik"
-                          ? "bg-blue-50 text-blue-600"
-                          : "bg-slate-100 text-slate-500"
-                      }`}
-                    >
-                      {teacher.specialization}
-                    </span>
-                  </td>
-
-                  {/* Subjects */}
-                  <td className="py-4 px-6 font-medium text-slate-600">
-                    {teacher.subjects}
-                  </td>
-
-                  {/* Classes */}
-                  <td className="py-4 px-6 font-semibold text-slate-600">
-                    {teacher.classes}
-                  </td>
-
-                  {/* Status */}
-                  <td className="py-4 px-6">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-emerald-100 bg-emerald-50 text-[10px] font-bold text-emerald-600">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      {teacher.status}
-                    </span>
-                  </td>
-
-                  {/* Actions */}
-                  <td className="py-4 px-6 text-center">
-                    <div className="flex items-center justify-center gap-3">
-                      <Link href="/dashboard/guru/profile" className="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition-all">
-                        <Eye className="w-4 h-4" />
-                      </Link>
-                      <Link href="/dashboard/guru/edit" className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all">
-                        <Pencil className="w-4 h-4" />
-                      </Link>
-                      <button className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-
                 </tr>
-              ))}
+              ) : teachers.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-slate-400 font-bold">
+                    Tidak ada data guru yang ditemukan.
+                  </td>
+                </tr>
+              ) : (
+                teachers.map((teacher) => (
+                  <tr key={teacher.id} className="hover:bg-slate-50/50 transition-all">
+                    
+                    {/* Name and Email */}
+                    <td className="py-4 px-6 flex items-center gap-3">
+                      {/* Initials Avatar */}
+                      <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 font-bold flex items-center justify-center border border-blue-100 shadow-sm shrink-0">
+                        {teacher.initials}
+                      </div>
+                      <div className="flex flex-col">
+                        <Link href={`/dashboard/guru/profile?id=${teacher.id}`} className="font-bold text-slate-800 hover:text-[#2563eb] transition-all">
+                          {teacher.name}
+                        </Link>
+                        <span className="text-[10px] text-slate-400 mt-0.5">{teacher.email}</span>
+                      </div>
+                    </td>
+
+                    {/* NIP */}
+                    <td className="py-4 px-6 font-medium text-slate-500">
+                      {teacher.nip}
+                    </td>
+
+                    {/* Specialization */}
+                    <td className="py-4 px-6">
+                      <span
+                        className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${
+                          teacher.specialization === "Akademik"
+                            ? "bg-blue-50 text-blue-600"
+                            : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        {teacher.specialization}
+                      </span>
+                    </td>
+
+                    {/* Subjects */}
+                    <td className="py-4 px-6 font-medium text-slate-600">
+                      {teacher.subjects}
+                    </td>
+
+                    {/* Classes */}
+                    <td className="py-4 px-6 font-medium text-slate-600">
+                      {teacher.classes}
+                    </td>
+
+                    {/* Status */}
+                    <td className="py-4 px-6">
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                          teacher.status === "Aktif"
+                            ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                            : "bg-rose-50 text-rose-600 border border-rose-100"
+                        }`}
+                      >
+                        {teacher.status}
+                      </span>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-4 px-6 text-center">
+                      <div className="flex items-center justify-center gap-3">
+                        <Link href={`/dashboard/guru/profile?id=${teacher.id}`} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition-all">
+                          <Eye className="w-4 h-4" />
+                        </Link>
+                        <Link href={`/dashboard/guru/edit?id=${teacher.id}`} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all">
+                          <Pencil className="w-4 h-4" />
+                        </Link>
+                        <button 
+                          onClick={() => handleDelete(teacher.id)}
+                          className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -327,32 +342,44 @@ export default function GuruPage() {
         {/* Pagination Footer */}
         <div className="p-5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
           <span className="text-xs font-semibold text-slate-400">
-            Showing 1 to 4 of 42 entries
+            Menampilkan {startEntry} sampai {endEntry} dari {filteredTotal} data guru
           </span>
           
           <div className="flex items-center gap-1">
             {/* Prev */}
-            <button className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 text-slate-400">
+            <button 
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              className={`p-1.5 rounded-lg border border-slate-100 text-slate-400 transition-all ${
+                currentPage === 1 ? "opacity-40 cursor-not-allowed" : "hover:bg-slate-50"
+              }`}
+            >
               <ChevronLeft className="w-4 h-4" />
             </button>
             
             {/* Page Buttons */}
-            <button className="w-8 h-8 rounded-lg bg-blue-600 text-white text-xs font-bold flex items-center justify-center shadow-sm">
-              1
-            </button>
-            <button className="w-8 h-8 rounded-lg hover:bg-slate-50 text-slate-600 text-xs font-semibold flex items-center justify-center">
-              2
-            </button>
-            <button className="w-8 h-8 rounded-lg hover:bg-slate-50 text-slate-600 text-xs font-semibold flex items-center justify-center">
-              3
-            </button>
-            <span className="text-xs text-slate-400 px-1">...</span>
-            <button className="w-8 h-8 rounded-lg hover:bg-slate-50 text-slate-600 text-xs font-semibold flex items-center justify-center">
-              11
-            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                onClick={() => setCurrentPage(p)}
+                className={`w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center transition-all ${
+                  currentPage === p
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "hover:bg-slate-50 text-slate-600 font-semibold"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
 
             {/* Next */}
-            <button className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 text-slate-400">
+            <button 
+              disabled={currentPage === totalPages || totalPages === 0}
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              className={`p-1.5 rounded-lg border border-slate-100 text-slate-400 transition-all ${
+                currentPage === totalPages || totalPages === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-slate-50"
+              }`}
+            >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
