@@ -1,18 +1,56 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { X, Calendar, Clock, Info, UserCheck, BookOpen } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { useRouter, useSearchParams } from "next/navigation";
+import { X, Calendar, Clock, Info, UserCheck, ChevronDown } from "lucide-react";
 
-export default function AddSubjectPage() {
+interface SubjectOption {
+  id: number;
+  name: string;
+  code: string;
+}
+
+interface TeacherOption {
+  id: number;
+  name: string;
+}
+
+function AddSubjectContent() {
   const router = useRouter();
-  const [subject, setSubject] = useState("Matematika");
-  const [teacher, setTeacher] = useState("Drs. Bambang Wijaya");
-  const [selectedDays, setSelectedDays] = useState<string[]>(["Senin", "Rabu"]);
-  const [startTime, setStartTime] = useState("08:00 AM");
-  const [endTime, setEndTime] = useState("09:30 AM");
+  const searchParams = useSearchParams();
+  const classId = searchParams.get("class_id") || "1";
+
+  const [subjects, setSubjects] = useState<SubjectOption[]>([]);
+  const [teachers, setTeachers] = useState<TeacherOption[]>([]);
+  const [selectedSubjectId, setSelectedSubjectId] = useState("");
+  const [selectedTeacherId, setSelectedTeacherId] = useState("");
+  const [selectedDays, setSelectedDays] = useState<string[]>(["Senin"]);
+  const [startTime, setStartTime] = useState("08:00");
+  const [endTime, setEndTime] = useState("09:30");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    async function initOptions() {
+      setLoading(true);
+      try {
+        const [subRes, teachRes] = await Promise.all([
+          fetch("/api/subjects"),
+          fetch("/api/teachers"),
+        ]);
+        const subJson = await subRes.json();
+        const teachJson = await teachRes.json();
+        if (subJson.success) setSubjects(subJson.data);
+        if (teachJson.success) setTeachers(teachJson.data);
+      } catch (err) {
+        console.error("Failed to load options:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    initOptions();
+  }, []);
 
   const daysList = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
@@ -24,11 +62,46 @@ export default function AddSubjectPage() {
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Mata Pelajaran Berhasil Ditambahkan ke Kurikulum!");
-    router.push("/dashboard/mapel/detail");
+    if (!selectedSubjectId || !selectedTeacherId) {
+      alert("Harap pilih mata pelajaran dan guru pengajar!");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/classes/${classId}/subjects`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subjectId: selectedSubjectId,
+          teacherId: selectedTeacherId,
+          scheduleDays: selectedDays,
+          startTime,
+          endTime,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        alert("Mata Pelajaran Berhasil Ditambahkan ke Kurikulum!");
+        router.push(`/dashboard/mapel/detail?class_id=${classId}`);
+      } else {
+        alert(json.message || "Gagal menambahkan mata pelajaran");
+      }
+    } catch {
+      alert("Terjadi kesalahan koneksi");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="py-20 text-center text-slate-400 font-bold">
+        Memuat pilihan kurikulum...
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto bg-white border border-slate-100 rounded-3xl shadow-[0_4px_30px_rgb(0,0,0,0.03)] overflow-hidden">
@@ -36,9 +109,9 @@ export default function AddSubjectPage() {
       <div className="p-6 border-b border-slate-100 flex justify-between items-center">
         <div>
           <h1 className="text-xl font-extrabold text-[#1e293b]">Tambah Mata Pelajaran ke Kelas</h1>
-          <p className="text-xs text-slate-400 mt-1">Lengkapi detail kurikulum untuk Kelas 4-C</p>
+          <p className="text-xs text-slate-400 mt-1">Lengkapi detail kurikulum untuk kelas terpilih</p>
         </div>
-        <Link href="/dashboard/mapel/detail">
+        <Link href={`/dashboard/mapel/detail?class_id=${classId}`}>
           <button className="p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-all">
             <X className="w-5 h-5" />
           </button>
@@ -53,16 +126,17 @@ export default function AddSubjectPage() {
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pilih Mata Pelajaran</label>
           <div className="relative">
             <select
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
+              value={selectedSubjectId}
+              onChange={(e) => setSelectedSubjectId(e.target.value)}
+              required
               className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-[#f8fafc] text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#2563eb] focus:border-transparent appearance-none"
             >
-              <option value="Matematika">Matematika</option>
-              <option value="Bahasa Indonesia">Bahasa Indonesia</option>
-              <option value="Ilmu Pengetahuan Alam">Ilmu Pengetahuan Alam</option>
-              <option value="Bahasa Inggris">Bahasa Inggris</option>
-              <option value="Seni Budaya">Seni Budaya</option>
-              <option value="Pendidikan Jasmani">Pendidikan Jasmani</option>
+              <option value="">-- Pilih Mata Pelajaran --</option>
+              {subjects.map((sub) => (
+                <option key={sub.id} value={sub.id}>
+                  {sub.name} ({sub.code})
+                </option>
+              ))}
             </select>
             <ChevronDown className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
@@ -73,15 +147,17 @@ export default function AddSubjectPage() {
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pilih Guru Pengajar</label>
           <div className="relative">
             <select
-              value={teacher}
-              onChange={(e) => setTeacher(e.target.value)}
+              value={selectedTeacherId}
+              onChange={(e) => setSelectedTeacherId(e.target.value)}
+              required
               className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-[#f8fafc] text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#2563eb] focus:border-transparent appearance-none"
             >
-              <option value="Drs. Bambang Wijaya">Drs. Bambang Wijaya</option>
-              <option value="Ibu Sarah Wijaya, M.Pd">Ibu Sarah Wijaya, M.Pd</option>
-              <option value="Bpk. Aris Setiawan, S.Pd">Bpk. Aris Setiawan, S.Pd</option>
-              <option value="Bpk. Danu Pratama, S.Pd">Bpk. Danu Pratama, S.Pd</option>
-              <option value="Coach Hendra">Coach Hendra</option>
+              <option value="">-- Pilih Guru Pengajar --</option>
+              {teachers.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
             </select>
             <UserCheck className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
@@ -107,7 +183,7 @@ export default function AddSubjectPage() {
                     className={`px-4.5 py-2 rounded-lg text-xs font-bold transition-all border ${
                       isActive
                         ? "bg-[#2563eb] text-white border-[#2563eb] shadow-sm"
-                        : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                        : "bg-white text-slate-505 border-slate-200 hover:bg-slate-50"
                     }`}
                   >
                     {day}
@@ -122,13 +198,12 @@ export default function AddSubjectPage() {
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Waktu Mulai</span>
               <div className="relative">
                 <input
-                  type="text"
-                  placeholder="08:00 AM"
+                  type="time"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
+                  required
                   className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
                 />
-                <Clock className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
 
@@ -136,42 +211,38 @@ export default function AddSubjectPage() {
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Waktu Selesai</span>
               <div className="relative">
                 <input
-                  type="text"
-                  placeholder="09:30 AM"
+                  type="time"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
+                  required
                   className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
                 />
-                <Clock className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
           </div>
-
         </div>
 
         {/* Tip Box */}
         <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4.5 flex gap-3 text-emerald-800">
           <Info className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
           <p className="text-[10px] font-bold leading-relaxed text-emerald-600">
-            Mata pelajaran yang ditambahkan akan secara otomatis terintegrasi dengan laporan capaian belajar dan absensi kelas 4-C.
+            Mata pelajaran yang ditambahkan akan secara otomatis terintegrasi dengan laporan capaian belajar dan absensi kelas.
           </p>
         </div>
 
         {/* Action Footer */}
         <div className="flex justify-end items-center gap-4 border-t border-slate-100 pt-5 mt-2">
-          <Link href="/dashboard/mapel/detail">
-            <button
-              type="button"
-              className="text-xs font-bold text-[#2563eb] hover:underline"
-            >
+          <Link href={`/dashboard/mapel/detail?class_id=${classId}`}>
+            <span className="text-xs font-bold text-[#2563eb] hover:underline cursor-pointer">
               Batalkan
-            </button>
+            </span>
           </Link>
           <button
             type="submit"
-            className="py-2.5 px-6 rounded-lg bg-[#2563eb] text-white hover:bg-blue-700 text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all"
+            disabled={saving}
+            className="py-2.5 px-6 rounded-lg bg-[#2563eb] text-white hover:bg-blue-700 text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all disabled:opacity-60"
           >
-            + Tambah ke Kurikulum
+            {saving ? "Menambahkan..." : "+ Tambah ke Kurikulum"}
           </button>
         </div>
 
@@ -180,22 +251,10 @@ export default function AddSubjectPage() {
   );
 }
 
-// Simple internal helper component
-function ChevronDown(props: React.SVGProps<SVGSVGElement>) {
+export default function AddSubjectPage() {
   return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m6 9 6 6 6-6" />
-    </svg>
+    <Suspense fallback={<div className="py-20 text-center text-slate-400 font-bold">Memuat Halaman...</div>}>
+      <AddSubjectContent />
+    </Suspense>
   );
 }

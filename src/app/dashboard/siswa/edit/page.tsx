@@ -1,39 +1,106 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
-  Save,
   User,
   Mail,
   Phone,
   GraduationCap,
   Camera,
-  CheckCircle2,
   Calendar,
-  Lightbulb,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
-export default function EditSiswaPage() {
+function EditSiswaContent() {
   const router = useRouter();
-  const [name, setName] = useState("Aris Setiawan");
-  const [nisn, setNisn] = useState("0098223145");
-  const [gender, setGender] = useState("L");
-  const [birthPlace, setBirthPlace] = useState("Jakarta");
-  const [birthDate, setBirthDate] = useState("2012-05-14");
-  const [address, setAddress] = useState("Jl. Mawar Melati No. 45, Kebayoran Baru, Jakarta Selatan, 12150");
-  const [parentEmail, setParentEmail] = useState("orangtua@example.com");
-  const [parentPhone, setParentPhone] = useState("+62 812 3456 7890");
-  const [gradeLevel, setGradeLevel] = useState("5");
-  const [section, setSection] = useState("B");
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id") || "1";
 
-  const handleSave = (e: React.FormEvent) => {
+  const [name, setName] = useState("");
+  const [nisn, setNisn] = useState("");
+  const [gender, setGender] = useState("L");
+  const [birthPlace, setBirthPlace] = useState("");
+  const [birthDate, setBirthDate] = useState("2012-01-01");
+  const [address, setAddress] = useState("");
+  const [parentEmail, setParentEmail] = useState("");
+  const [parentPhone, setParentPhone] = useState("");
+  const [classLabel, setClassLabel] = useState("");
+  const [status, setStatus] = useState("Aktif");
+  const [initials, setInitials] = useState("S");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    async function fetchStudent() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/students/${id}`);
+        const json = await res.json();
+        if (json.success) {
+          const s = json.data;
+          setName(s.name);
+          setNisn(s.nisn);
+          setGender(s.genderCode);
+          setClassLabel(s.classLabel);
+          setStatus(s.status);
+          setInitials(s.initials);
+        }
+      } catch (err) {
+        console.error("Failed to fetch student:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchStudent();
+  }, [id]);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Perubahan Data Siswa Berhasil Disimpan!");
-    router.push("/dashboard/siswa/profile");
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/students/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          genderCode: gender,
+          nisn,
+          classLabel,
+          status,
+        }),
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        alert("Perubahan Data Siswa Berhasil Disimpan!");
+        router.push(`/dashboard/siswa/profile?id=${id}`);
+      } else {
+        alert(data.message || "Gagal menyimpan perubahan");
+      }
+    } catch {
+      alert("Terjadi kesalahan koneksi");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="py-20 text-center text-slate-400 font-bold">
+        Memuat data siswa...
+      </div>
+    );
+  }
+
+  const classOptions = [
+    "Kelas 1-A", "Kelas 1-B",
+    "Kelas 2-A", "Kelas 2-B",
+    "Kelas 3-A", "Kelas 3-B",
+    "Kelas 4-A", "Kelas 4-B",
+    "Kelas 5-A", "Kelas 5-B",
+    "Kelas 6-A", "Kelas 6-B",
+  ];
 
   return (
     <div className="flex flex-col gap-8">
@@ -48,26 +115,27 @@ export default function EditSiswaPage() {
 
         {/* Top actions */}
         <div className="flex items-center gap-3 self-stretch xl:self-auto">
-          <Link href="/dashboard/siswa/profile" className="flex-1 xl:flex-initial">
+          <Link href={`/dashboard/siswa/profile?id=${id}`} className="flex-1 xl:flex-initial">
             <Button variant="secondary" className="!py-2.5 !px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold rounded-lg w-full">
               Batalkan
             </Button>
           </Link>
           <button
             onClick={handleSave}
-            className="flex-1 xl:flex-initial py-2.5 px-6 rounded-lg bg-[#2563eb] text-white hover:bg-[#1d4ed8] text-xs font-bold flex items-center justify-center shadow-sm transition-all whitespace-nowrap"
+            disabled={saving}
+            className="flex-1 xl:flex-initial py-2.5 px-6 rounded-lg bg-[#2563eb] text-white hover:bg-[#1d4ed8] text-xs font-bold flex items-center justify-center shadow-sm transition-all whitespace-nowrap disabled:opacity-60"
           >
-            Simpan Perubahan
+            {saving ? "Menyimpan..." : "Simpan Perubahan"}
           </button>
         </div>
       </div>
 
       {/* Main split-column layout */}
       <div className="flex flex-col lg:flex-row gap-8 items-start">
-        
-        {/* Left Column Forms (Biodata, Kontak, Penempatan) */}
+
+        {/* Left Column Forms */}
         <form onSubmit={handleSave} className="flex-1 flex flex-col gap-6 w-full">
-          
+
           {/* Card 1: Biodata Pribadi */}
           <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-5">
             <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
@@ -91,7 +159,7 @@ export default function EditSiswaPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">NISN (Nomor Induk Siswa Nasional)</label>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">NISN</label>
                 <input
                   type="text"
                   placeholder="10 Digit NISN"
@@ -110,7 +178,6 @@ export default function EditSiswaPage() {
                   required
                   className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
                 >
-                  <option value="">Pilih Jenis Kelamin</option>
                   <option value="L">Laki-laki</option>
                   <option value="P">Perempuan</option>
                 </select>
@@ -142,14 +209,14 @@ export default function EditSiswaPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Alamat Tempat Tinggi</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Alamat Tempat Tinggal</label>
               <textarea
                 placeholder="Jl. Anggrek No. 45, Kebayoran Baru..."
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 rows={3}
                 className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm resize-none"
-              ></textarea>
+              />
             </div>
           </div>
 
@@ -174,7 +241,6 @@ export default function EditSiswaPage() {
                     placeholder="orangtua@example.com"
                     value={parentEmail}
                     onChange={(e) => setParentEmail(e.target.value)}
-                    required
                     className="w-full pl-9 pr-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
                   />
                 </div>
@@ -191,7 +257,6 @@ export default function EditSiswaPage() {
                     placeholder="+62 812 3456 7890"
                     value={parentPhone}
                     onChange={(e) => setParentPhone(e.target.value)}
-                    required
                     className="w-full pl-9 pr-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
                   />
                 </div>
@@ -210,53 +275,67 @@ export default function EditSiswaPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tingkat Kelas</label>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kelas</label>
                 <select
-                  value={gradeLevel}
-                  onChange={(e) => setGradeLevel(e.target.value)}
+                  value={classLabel}
+                  onChange={(e) => setClassLabel(e.target.value)}
                   required
                   className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
                 >
                   <option value="">Pilih Kelas</option>
-                  <option value="1">Kelas 1</option>
-                  <option value="2">Kelas 2</option>
-                  <option value="3">Kelas 3</option>
-                  <option value="4">Kelas 4</option>
-                  <option value="5">Kelas 5</option>
-                  <option value="6">Kelas 6</option>
+                  {classOptions.map((cls) => (
+                    <option key={cls} value={cls}>{cls}</option>
+                  ))}
                 </select>
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kelompok Belajar / Section</label>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status</label>
                 <select
-                  value={section}
-                  onChange={(e) => setSection(e.target.value)}
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
                   required
                   className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
                 >
-                  <option value="">Pilih Kelompok</option>
-                  <option value="A">Section A</option>
-                  <option value="B">Section B</option>
-                  <option value="C">Section C</option>
+                  <option value="Aktif">Aktif</option>
+                  <option value="Nonaktif">Nonaktif</option>
                 </select>
               </div>
             </div>
           </div>
 
+          {/* Mobile Submit */}
+          <div className="flex items-center justify-end gap-4 border-t border-slate-100/80 pt-4 mt-2 lg:hidden">
+            <Link href={`/dashboard/siswa/profile?id=${id}`}>
+              <span className="text-slate-500 hover:text-slate-800 text-xs font-bold cursor-pointer px-4 py-2.5 rounded-lg">
+                Batalkan
+              </span>
+            </Link>
+            <button
+              type="submit"
+              disabled={saving}
+              className="py-2.5 px-6 rounded-lg bg-[#2563eb] text-white hover:bg-[#1d4ed8] text-xs font-bold shadow-sm transition-all whitespace-nowrap disabled:opacity-60"
+            >
+              {saving ? "Menyimpan..." : "Simpan Perubahan"}
+            </button>
+          </div>
+
         </form>
 
-        {/* Right Column (Foto Profil & Progres & Tips) */}
+        {/* Right Column */}
         <div className="w-full lg:w-[360px] flex flex-col gap-6 shrink-0">
-          
+
           {/* Card 1: Foto Profil Siswa */}
           <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col items-center justify-center text-center gap-4">
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider self-start">Foto Profil Siswa</h4>
 
-            {/* Circular image placeholder */}
             <div className="relative">
-              <div className="w-24 h-24 rounded-2xl bg-blue-50 text-[#2563eb] border border-blue-100 shadow-md flex items-center justify-center font-extrabold text-xl">
-                AS
+              <div className={`w-24 h-24 rounded-2xl border shadow-md flex items-center justify-center font-extrabold text-xl ${
+                gender === "P"
+                  ? "bg-pink-50 text-pink-600 border-pink-100"
+                  : "bg-blue-50 text-[#2563eb] border-blue-100"
+              }`}>
+                {initials}
               </div>
               <span className="absolute bottom-0 right-0 bg-[#2563eb] text-white p-1.5 rounded-full border-2 border-white shadow-sm">
                 <Camera className="w-3.5 h-3.5" />
@@ -275,62 +354,19 @@ export default function EditSiswaPage() {
             </button>
           </div>
 
-          {/* Card 2: Progres Pendaftaran */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-6">
-            <div className="flex items-center justify-between text-xs font-bold">
-              <span className="text-slate-700 font-extrabold text-sm">Kelengkapan Form</span>
-              <span className="text-emerald-600">100%</span>
-            </div>
 
-            {/* Progress bar */}
-            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-              <div style={{ width: "100%" }} className="h-full bg-emerald-550 rounded-full"></div>
-            </div>
-
-            {/* Steps Checklist */}
-            <div className="flex flex-col gap-3.5 mt-2">
-              <div className="flex items-center gap-2.5 text-xs font-bold text-emerald-600">
-                <CheckCircle2 className="w-4 h-4 fill-emerald-50" />
-                <span>Biodata Pribadi lengkap</span>
-              </div>
-
-              <div className="flex items-center gap-2.5 text-xs font-bold text-emerald-600">
-                <CheckCircle2 className="w-4 h-4 fill-emerald-50" />
-                <span>Informasi Kontak lengkap</span>
-              </div>
-
-              <div className="flex items-center gap-2.5 text-xs font-bold text-emerald-600">
-                <CheckCircle2 className="w-4 h-4 fill-emerald-50" />
-                <span>Penempatan Akademik sesuai</span>
-              </div>
-
-              <div className="flex items-center gap-2.5 text-xs font-bold text-emerald-600">
-                <CheckCircle2 className="w-4 h-4 fill-emerald-50" />
-                <span>Kredensial Akun aktif</span>
-              </div>
-
-              <div className="flex items-center gap-2.5 text-xs font-bold text-emerald-600">
-                <CheckCircle2 className="w-4 h-4 fill-emerald-50" />
-                <span>Unggah Foto Profil sesuai</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3: Tips Admin */}
-          <div className="bg-blue-50/50 rounded-2xl p-6 border border-blue-50 flex gap-4 shadow-sm">
-            <Lightbulb className="w-6 h-6 text-[#2563eb] shrink-0 mt-0.5" />
-            <div className="flex flex-col gap-1.5">
-              <h4 className="text-xs font-extrabold text-slate-700">Tips Admin</h4>
-              <p className="text-[10px] text-slate-400 font-bold leading-relaxed">
-                Pastikan NISN siswa valid dan sesuai dengan Dapodik untuk menghindari duplikasi data di sistem pusat.
-              </p>
-            </div>
-          </div>
 
         </div>
 
       </div>
-
     </div>
+  );
+}
+
+export default function EditSiswaPage() {
+  return (
+    <Suspense fallback={<div className="py-20 text-center text-slate-400 font-bold">Memuat Halaman...</div>}>
+      <EditSiswaContent />
+    </Suspense>
   );
 }
