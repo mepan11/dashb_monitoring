@@ -53,6 +53,22 @@ function ClassDetailContent() {
   const [selectedStatus, setSelectedStatus] = useState("Semua Status");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalStats, setTotalStats] = useState({ total: 0, male: 0, female: 0 });
+  const [periodId, setPeriodId] = useState("");
+
+  // Mendengarkan perubahan periode akademik
+  useEffect(() => {
+    const cached = localStorage.getItem("active_period_id") || "";
+    setPeriodId(cached);
+
+    const handlePeriodChange = (e: any) => {
+      setPeriodId(e.detail.periodId || "");
+    };
+
+    window.addEventListener("academic_period_changed", handlePeriodChange);
+    return () => {
+      window.removeEventListener("academic_period_changed", handlePeriodChange);
+    };
+  }, []);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -89,13 +105,13 @@ function ClassDetailContent() {
     fetchClassStudents();
   }, [fetchClassStudents]);
 
-  // Load available students when modal opens
+  // Load available students when modal opens or period changes
   useEffect(() => {
-    if (!isModalOpen) return;
+    if (!isModalOpen || !periodId) return;
     async function loadAvailable() {
       setLoadingAvailable(true);
       try {
-        const res = await fetch(`/api/students/available?currentClass=${encodeURIComponent(className)}`);
+        const res = await fetch(`/api/students/available?period_id=${periodId}`);
         const json = await res.json();
         if (json.success) {
           setAvailableStudents(json.data);
@@ -107,7 +123,7 @@ function ClassDetailContent() {
       }
     }
     loadAvailable();
-  }, [isModalOpen, className]);
+  }, [isModalOpen, periodId]);
 
   const handleDeleteStudent = async (studentId: string, name: string) => {
     if (!confirm(`Keluarkan siswa "${name}" dari kelas ${className}?`)) return;

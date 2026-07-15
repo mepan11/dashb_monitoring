@@ -40,6 +40,7 @@ export default function EkstrakurikulerPage() {
   const [programs, setPrograms] = useState<ProgramItem[]>([]);
   const [coaches, setCoaches] = useState<CoachOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [periodId, setPeriodId] = useState<string>("");
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -57,10 +58,26 @@ export default function EkstrakurikulerPage() {
 
   const filters = ["Semua", "Olahraga", "Seni & Sains"];
 
-  async function fetchPrograms() {
+  // Mendengarkan perubahan periode akademik
+  useEffect(() => {
+    const cached = localStorage.getItem("active_period_id") || "";
+    setPeriodId(cached);
+
+    const handlePeriodChange = (e: any) => {
+      setPeriodId(e.detail.periodId || "");
+    };
+
+    window.addEventListener("academic_period_changed", handlePeriodChange);
+    return () => {
+      window.removeEventListener("academic_period_changed", handlePeriodChange);
+    };
+  }, []);
+
+  async function fetchPrograms(pid: string) {
+    if (!pid) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/extracurriculars");
+      const res = await fetch(`/api/extracurriculars?period_id=${pid}`);
       const json = await res.json();
       if (json.success) {
         setPrograms(json.data);
@@ -85,9 +102,11 @@ export default function EkstrakurikulerPage() {
   }
 
   useEffect(() => {
-    fetchPrograms();
-    fetchCoaches();
-  }, []);
+    if (periodId) {
+      fetchPrograms(periodId);
+      fetchCoaches();
+    }
+  }, [periodId]);
 
   const handleOpenAddModal = () => {
     setModalMode("add");
@@ -134,6 +153,7 @@ export default function EkstrakurikulerPage() {
           schedule: ekskulSchedule,
           location: ekskulLocation,
           contact: ekskulContact,
+          periodId, // Kirim periodId aktif
         }),
       });
 
@@ -141,7 +161,7 @@ export default function EkstrakurikulerPage() {
       if (res.ok && json.success) {
         alert(modalMode === "add" ? "Ekstrakurikuler berhasil ditambahkan!" : "Ekstrakurikuler berhasil diperbarui!");
         setIsModalOpen(false);
-        fetchPrograms();
+        fetchPrograms(periodId);
       } else {
         alert(json.message || "Gagal menyimpan data");
       }
@@ -158,7 +178,7 @@ export default function EkstrakurikulerPage() {
       const res = await fetch(`/api/extracurriculars/${id}`, { method: "DELETE" });
       const json = await res.json();
       if (json.success) {
-        fetchPrograms();
+        fetchPrograms(periodId);
       } else {
         alert(json.message || "Gagal menghapus program");
       }

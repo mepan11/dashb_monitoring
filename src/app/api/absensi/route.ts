@@ -10,6 +10,7 @@ export async function GET(request: Request) {
     const endDate = url.searchParams.get("endDate");
     const classId = url.searchParams.get("classId");
     const extracurricularId = url.searchParams.get("extracurricularId");
+    const periodId = url.searchParams.get("period_id");
 
     if (!type || (!date && (!startDate || !endDate))) {
       return NextResponse.json(
@@ -18,7 +19,16 @@ export async function GET(request: Request) {
       );
     }
 
-    // Normalize type string to handle both English and Indonesian terms
+    // Resolusi period_id aktif
+    let activePeriodId = periodId;
+    if (!activePeriodId || activePeriodId === "undefined") {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
+    }
+
+    // Normalisasi tipe term
     if (type === "siswa") type = "students";
     if (type === "guru") type = "teachers";
     if (type === "coach") type = "coaches";
@@ -33,7 +43,7 @@ export async function GET(request: Request) {
         );
       }
 
-      // Fetch class name first
+      // Ambil nama kelas terlebih dahulu
       const [classRows]: any = await db.query("SELECT class_name FROM classes WHERE id = ?", [classId]);
       const className = classRows[0]?.class_name;
       if (!className) {
@@ -41,29 +51,28 @@ export async function GET(request: Request) {
       }
 
       if (isRange) {
-        // Query for range history
+        // Query untuk histori rentang
         const [rows]: any = await db.query(
           `SELECT DATE_FORMAT(sa.date, '%Y-%m-%d') AS date, s.name, s.nisn, sa.status AS attendanceStatus
            FROM student_attendance sa
            JOIN students s ON sa.student_id = s.id
-           WHERE s.class_label = ? AND sa.date BETWEEN ? AND ?
+           WHERE s.class_label = ? AND sa.date BETWEEN ? AND ? AND sa.period_id = ?
            ORDER BY sa.date ASC, s.name ASC`,
-          [className, startDate, endDate]
+          [className, startDate, endDate, activePeriodId]
         );
         return NextResponse.json({ success: true, data: rows });
       } else {
-        // Fetch students and their attendance status on that date
+        // Ambil data siswa dan kehadiran pada tanggal tersebut
         const [rows]: any = await db.query(
           `SELECT s.id, s.name, s.gender_text, s.gender_code, s.nisn, s.status AS studentStatus,
                   sa.status AS attendanceStatus
            FROM students s
-           LEFT JOIN student_attendance sa ON s.id = sa.student_id AND sa.date = ?
+           LEFT JOIN student_attendance sa ON s.id = sa.student_id AND sa.date = ? AND sa.period_id = ?
            WHERE s.class_label = ?
            ORDER BY s.name ASC`,
-          [date, className]
+          [date, activePeriodId, className]
         );
 
-        // Map to return formatted data
         const formatted = rows.map((s: any) => {
           const nameParts = s.name.trim().split(" ");
           const initials = nameParts.length >= 2
@@ -84,25 +93,25 @@ export async function GET(request: Request) {
 
     } else if (type === "teachers") {
       if (isRange) {
-        // Query for range history
+        // Query untuk histori rentang
         const [rows]: any = await db.query(
           `SELECT DATE_FORMAT(ta.date, '%Y-%m-%d') AS date, t.name, t.nip, ta.status AS attendanceStatus, ta.check_in_time AS checkInTime, ta.check_out_time AS checkOutTime
            FROM teacher_attendance ta
            JOIN teachers t ON ta.teacher_id = t.id
-           WHERE ta.date BETWEEN ? AND ?
+           WHERE ta.date BETWEEN ? AND ? AND ta.period_id = ?
            ORDER BY ta.date ASC, t.name ASC`,
-          [startDate, endDate]
+          [startDate, endDate, activePeriodId]
         );
         return NextResponse.json({ success: true, data: rows });
       } else {
-        // Fetch teachers and their attendance on that date
+        // Ambil data guru dan kehadiran pada tanggal tersebut
         const [rows]: any = await db.query(
           `SELECT t.id, t.name, t.email, t.nip, t.specialization, t.status AS teacherStatus,
                   ta.status AS attendanceStatus, ta.check_in_time AS checkInTime, ta.check_out_time AS checkOutTime
            FROM teachers t
-           LEFT JOIN teacher_attendance ta ON t.id = ta.teacher_id AND ta.date = ?
+           LEFT JOIN teacher_attendance ta ON t.id = ta.teacher_id AND ta.date = ? AND ta.period_id = ?
            ORDER BY t.name ASC`,
-          [date]
+          [date, activePeriodId]
         );
 
         const formatted = rows.map((t: any) => {
@@ -127,25 +136,25 @@ export async function GET(request: Request) {
 
     } else if (type === "coaches") {
       if (isRange) {
-        // Query for range history
+        // Query untuk histori rentang
         const [rows]: any = await db.query(
           `SELECT DATE_FORMAT(ca.date, '%Y-%m-%d') AS date, c.name, c.id_number AS idNumber, ca.status AS attendanceStatus, ca.check_in_time AS checkInTime, ca.check_out_time AS checkOutTime
            FROM coach_attendance ca
            JOIN coaches c ON ca.coach_id = c.id
-           WHERE ca.date BETWEEN ? AND ?
+           WHERE ca.date BETWEEN ? AND ? AND ca.period_id = ?
            ORDER BY ca.date ASC, c.name ASC`,
-          [startDate, endDate]
+          [startDate, endDate, activePeriodId]
         );
         return NextResponse.json({ success: true, data: rows });
       } else {
-        // Fetch coaches and their attendance on that date
+        // Ambil data coach dan kehadiran pada tanggal tersebut
         const [rows]: any = await db.query(
           `SELECT c.id, c.name, c.email, c.id_number AS idNumber, c.specialization, c.status AS coachStatus,
                   ca.status AS attendanceStatus, ca.check_in_time AS checkInTime, ca.check_out_time AS checkOutTime
            FROM coaches c
-           LEFT JOIN coach_attendance ca ON c.id = ca.coach_id AND ca.date = ?
+           LEFT JOIN coach_attendance ca ON c.id = ca.coach_id AND ca.date = ? AND ca.period_id = ?
            ORDER BY c.name ASC`,
-          [date]
+          [date, activePeriodId]
         );
 
         const formatted = rows.map((c: any) => {
@@ -177,28 +186,26 @@ export async function GET(request: Request) {
       }
 
       if (isRange) {
-        // Query for range history
         const [rows]: any = await db.query(
           `SELECT DATE_FORMAT(sa.date, '%Y-%m-%d') AS date, s.name, s.nisn, s.class_label AS classLabel, sa.status AS attendanceStatus
            FROM student_attendance sa
            JOIN students s ON sa.student_id = s.id
            JOIN extracurricular_students es ON es.student_id = s.id
-           WHERE es.extracurricular_id = ? AND sa.date BETWEEN ? AND ?
+           WHERE es.extracurricular_id = ? AND sa.date BETWEEN ? AND ? AND sa.period_id = ?
            ORDER BY sa.date ASC, s.name ASC`,
-          [extracurricularId, startDate, endDate]
+          [extracurricularId, startDate, endDate, activePeriodId]
         );
         return NextResponse.json({ success: true, data: rows });
       } else {
-        // Fetch students and their attendance status on that date for a specific extracurricular
         const [rows]: any = await db.query(
           `SELECT s.id, s.name, s.gender_text, s.gender_code, s.nisn, s.class_label,
                   sa.status AS attendanceStatus
            FROM extracurricular_students es
            JOIN students s ON es.student_id = s.id
-           LEFT JOIN student_attendance sa ON s.id = sa.student_id AND sa.date = ?
+           LEFT JOIN student_attendance sa ON s.id = sa.student_id AND sa.date = ? AND sa.period_id = ?
            WHERE es.extracurricular_id = ?
            ORDER BY s.name ASC`,
-          [date, extracurricularId]
+          [date, activePeriodId, extracurricularId]
         );
 
         const formatted = rows.map((s: any) => {
@@ -234,7 +241,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    let { type, date, attendance, classId, subjectId, extracurricularId } = body;
+    let { type, date, attendance, classId, subjectId, extracurricularId, periodId } = body;
 
     if (!type || !date || !Array.isArray(attendance)) {
       return NextResponse.json(
@@ -243,20 +250,27 @@ export async function POST(request: Request) {
       );
     }
 
-    // Normalize type string to handle both English and Indonesian terms
+    // Resolusi period_id aktif
+    let activePeriodId = periodId;
+    if (!activePeriodId) {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
+    }
+
+    // Normalisasi tipe term
     if (type === "siswa") type = "students";
     if (type === "guru") type = "teachers";
     if (type === "coach") type = "coaches";
 
     if (type === "students") {
-      // 1. Student class/subject attendance
       for (const item of attendance) {
         const { studentId, status } = item;
         
-        // Check if attendance already exists for this student on this date
         const [existing]: any = await db.query(
-          "SELECT id FROM student_attendance WHERE student_id = ? AND date = ?",
-          [studentId, date]
+          "SELECT id FROM student_attendance WHERE student_id = ? AND date = ? AND period_id = ?",
+          [studentId, date, activePeriodId]
         );
 
         if (existing.length > 0) {
@@ -266,13 +280,13 @@ export async function POST(request: Request) {
           );
         } else {
           await db.query(
-            "INSERT INTO student_attendance (student_id, status, date) VALUES (?, ?, ?)",
-            [studentId, status, date]
+            "INSERT INTO student_attendance (student_id, status, date, period_id) VALUES (?, ?, ?, ?)",
+            [studentId, status, date, activePeriodId]
           );
         }
       }
 
-      // Log activity
+      // Log aktivitas
       const [classInfo]: any = await db.query("SELECT class_name FROM classes WHERE id = ?", [classId]);
       const className = classInfo[0]?.class_name || "Kelas";
       await db.query(
@@ -283,13 +297,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: "Kehadiran siswa berhasil disimpan" });
 
     } else if (type === "teachers") {
-      // 2. Teacher attendance
       for (const item of attendance) {
         const { teacherId, status, checkInTime, checkOutTime } = item;
 
         const [existing]: any = await db.query(
-          "SELECT id FROM teacher_attendance WHERE teacher_id = ? AND date = ?",
-          [teacherId, date]
+          "SELECT id FROM teacher_attendance WHERE teacher_id = ? AND date = ? AND period_id = ?",
+          [teacherId, date, activePeriodId]
         );
 
         if (existing.length > 0) {
@@ -299,8 +312,8 @@ export async function POST(request: Request) {
           );
         } else {
           await db.query(
-            "INSERT INTO teacher_attendance (teacher_id, check_in_time, check_out_time, status, date) VALUES (?, ?, ?, ?, ?)",
-            [teacherId, checkInTime || "-- : --", checkOutTime || "-- : --", status, date]
+            "INSERT INTO teacher_attendance (teacher_id, check_in_time, check_out_time, status, date, period_id) VALUES (?, ?, ?, ?, ?, ?)",
+            [teacherId, checkInTime || "-- : --", checkOutTime || "-- : --", status, date, activePeriodId]
           );
         }
       }
@@ -313,13 +326,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: "Kehadiran guru berhasil disimpan" });
 
     } else if (type === "coaches") {
-      // 3. Coach attendance
       for (const item of attendance) {
         const { coachId, status, checkInTime, checkOutTime } = item;
 
         const [existing]: any = await db.query(
-          "SELECT id FROM coach_attendance WHERE coach_id = ? AND date = ?",
-          [coachId, date]
+          "SELECT id FROM coach_attendance WHERE coach_id = ? AND date = ? AND period_id = ?",
+          [coachId, date, activePeriodId]
         );
 
         if (existing.length > 0) {
@@ -329,8 +341,8 @@ export async function POST(request: Request) {
           );
         } else {
           await db.query(
-            "INSERT INTO coach_attendance (coach_id, check_in_time, check_out_time, status, date) VALUES (?, ?, ?, ?, ?)",
-            [coachId, checkInTime || "-- : --", checkOutTime || "-- : --", status, date]
+            "INSERT INTO coach_attendance (coach_id, check_in_time, check_out_time, status, date, period_id) VALUES (?, ?, ?, ?, ?, ?)",
+            [coachId, checkInTime || "-- : --", checkOutTime || "-- : --", status, date, activePeriodId]
           );
         }
       }
@@ -343,14 +355,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: "Kehadiran coach berhasil disimpan" });
 
     } else if (type === "ekskul") {
-      // 4. Extracurricular student attendance
       for (const item of attendance) {
         const { studentId, status } = item;
 
-        // Since there is no separate extracurricular student attendance table, we save to student_attendance
         const [existing]: any = await db.query(
-          "SELECT id FROM student_attendance WHERE student_id = ? AND date = ?",
-          [studentId, date]
+          "SELECT id FROM student_attendance WHERE student_id = ? AND date = ? AND period_id = ?",
+          [studentId, date, activePeriodId]
         );
 
         if (existing.length > 0) {
@@ -360,13 +370,13 @@ export async function POST(request: Request) {
           );
         } else {
           await db.query(
-            "INSERT INTO student_attendance (student_id, status, date) VALUES (?, ?, ?)",
-            [studentId, status, date]
+            "INSERT INTO student_attendance (student_id, status, date, period_id) VALUES (?, ?, ?, ?)",
+            [studentId, status, date, activePeriodId]
           );
         }
       }
 
-      // Log activity
+      // Log aktivitas
       const [ekskulInfo]: any = await db.query("SELECT name FROM extracurriculars WHERE id = ?", [extracurricularId]);
       const ekskulName = ekskulInfo[0]?.name || "Ekstrakurikuler";
       await db.query(

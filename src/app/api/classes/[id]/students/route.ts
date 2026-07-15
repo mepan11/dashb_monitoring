@@ -99,6 +99,26 @@ export async function POST(
       );
     }
 
+    // Check if student already has a class in the current period
+    const [studentRows]: any = await db.query(
+      "SELECT name, class_label FROM students WHERE id = ?",
+      [studentId]
+    );
+    const student = studentRows[0];
+    if (!student) {
+      return NextResponse.json(
+        { success: false, message: "Siswa tidak ditemukan" },
+        { status: 404 }
+      );
+    }
+
+    if (student.class_label && student.class_label !== "—" && student.class_label !== "") {
+      return NextResponse.json(
+        { success: false, message: `Siswa ${student.name} sudah terdaftar di kelas ${student.class_label} pada periode ini` },
+        { status: 400 }
+      );
+    }
+
     // Update class_label of student
     await db.query(
       "UPDATE students SET class_label = ? WHERE id = ?",

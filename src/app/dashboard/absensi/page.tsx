@@ -37,6 +37,21 @@ interface RecentAttendance {
 export default function AbsensiPage() {
   // Navigation Tabs
   const [activeTab, setActiveTab] = useState<"monitoring" | "presensi" | "riwayat">("monitoring");
+  const [periodId, setPeriodId] = useState<string>("");
+
+  useEffect(() => {
+    const cached = localStorage.getItem("active_period_id") || "";
+    setPeriodId(cached);
+
+    const handlePeriodChange = (e: any) => {
+      setPeriodId(e.detail.periodId || "");
+    };
+
+    window.addEventListener("academic_period_changed", handlePeriodChange);
+    return () => {
+      window.removeEventListener("academic_period_changed", handlePeriodChange);
+    };
+  }, []);
 
   // Presensi Sub-Tabs
   const [presensiType, setPresensiType] = useState<"siswa" | "guru" | "coach" | "ekskul">("siswa");
@@ -139,7 +154,7 @@ export default function AbsensiPage() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const res = await fetch("/api/absensi/stats");
+        const res = await fetch(`/api/absensi/stats?period_id=${periodId}`);
         const data = await res.json();
         if (data.success) {
           setTeacherRate(data.data.rates.teacher);
@@ -152,16 +167,18 @@ export default function AbsensiPage() {
         console.error("Error loading dashboard stats:", err);
       }
     }
-    fetchStats();
-  }, [activeTab]);
+    if (periodId) {
+      fetchStats();
+    }
+  }, [activeTab, periodId]);
 
   // Fetch Master Data (Classes and Extracurriculars)
   useEffect(() => {
     async function fetchMasterData() {
       try {
         const [resClasses, resExtracurriculars] = await Promise.all([
-          fetch("/api/classes").then((r) => r.json()),
-          fetch("/api/extracurriculars").then((r) => r.json())
+          fetch(`/api/classes?period_id=${periodId}`).then((r) => r.json()),
+          fetch(`/api/extracurriculars?period_id=${periodId}`).then((r) => r.json())
         ]);
         if (resClasses.success) setClasses(resClasses.data);
         if (resExtracurriculars.success) setExtracurriculars(resExtracurriculars.data);
@@ -169,12 +186,14 @@ export default function AbsensiPage() {
         console.error("Error loading master data:", err);
       }
     }
-    fetchMasterData();
-  }, []);
+    if (periodId) {
+      fetchMasterData();
+    }
+  }, [periodId]);
 
   // Fetch subjects and students (with attendance) when selected class or date changes
   useEffect(() => {
-    if (!selectedClassId || !selectedDate) {
+    if (!selectedClassId || !selectedDate || !periodId) {
       setSubjects([]);
       setStudents([]);
       return;
@@ -184,7 +203,7 @@ export default function AbsensiPage() {
       try {
         const [resSubj, resAtt] = await Promise.all([
           fetch(`/api/classes/${selectedClassId}/subjects`).then((r) => r.json()),
-          fetch(`/api/absensi?type=students&date=${selectedDate}&classId=${selectedClassId}`).then((r) => r.json())
+          fetch(`/api/absensi?type=students&date=${selectedDate}&classId=${selectedClassId}&period_id=${periodId}`).then((r) => r.json())
         ]);
 
         if (resSubj.success) setSubjects(resSubj.data);
@@ -201,7 +220,7 @@ export default function AbsensiPage() {
       }
     }
     fetchClassDetails();
-  }, [selectedClassId, selectedDate]);
+  }, [selectedClassId, selectedDate, periodId]);
 
   // Fetch subjects for Riwayat class changes
   useEffect(() => {
@@ -225,10 +244,10 @@ export default function AbsensiPage() {
 
   // Fetch teachers when entering teachers tab or when date changes
   useEffect(() => {
-    if (presensiType !== "guru" || !selectedDate) return;
+    if (presensiType !== "guru" || !selectedDate || !periodId) return;
     async function fetchTeachers() {
       try {
-        const res = await fetch(`/api/absensi?type=teachers&date=${selectedDate}`);
+        const res = await fetch(`/api/absensi?type=teachers&date=${selectedDate}&period_id=${periodId}`);
         const data = await res.json();
         if (data.success) {
           setTeachersList(data.data);
@@ -247,14 +266,14 @@ export default function AbsensiPage() {
       }
     }
     fetchTeachers();
-  }, [presensiType, selectedDate]);
+  }, [presensiType, selectedDate, periodId]);
 
   // Fetch coaches when entering coaches tab or when date changes
   useEffect(() => {
-    if (presensiType !== "coach" || !selectedDate) return;
+    if (presensiType !== "coach" || !selectedDate || !periodId) return;
     async function fetchCoaches() {
       try {
-        const res = await fetch(`/api/absensi?type=coaches&date=${selectedDate}`);
+        const res = await fetch(`/api/absensi?type=coaches&date=${selectedDate}&period_id=${periodId}`);
         const data = await res.json();
         if (data.success) {
           setCoachesList(data.data);
@@ -273,18 +292,18 @@ export default function AbsensiPage() {
       }
     }
     fetchCoaches();
-  }, [presensiType, selectedDate]);
+  }, [presensiType, selectedDate, periodId]);
 
   // Fetch extracurricular students and their attendance when selected ekskul or date changes
   useEffect(() => {
-    if (!selectedEkskulId || !selectedDate) {
+    if (!selectedEkskulId || !selectedDate || !periodId) {
       setEkskulStudents([]);
       return;
     }
 
     async function fetchEkskulStudents() {
       try {
-        const res = await fetch(`/api/absensi?type=ekskul&date=${selectedDate}&extracurricularId=${selectedEkskulId}`);
+        const res = await fetch(`/api/absensi?type=ekskul&date=${selectedDate}&extracurricularId=${selectedEkskulId}&period_id=${periodId}`);
         const data = await res.json();
         if (data.success) {
           setEkskulStudents(data.data);
@@ -299,7 +318,7 @@ export default function AbsensiPage() {
       }
     }
     fetchEkskulStudents();
-  }, [selectedEkskulId, selectedDate]);
+  }, [selectedEkskulId, selectedDate, periodId]);
 
   // Helper to change student attendance status
   const handleStudentAttChange = (studentId: string, status: string) => {
@@ -382,7 +401,8 @@ export default function AbsensiPage() {
 
     let payload: any = {
       type: presensiType,
-      date: selectedDate
+      date: selectedDate,
+      periodId // Kirim periodId aktif ke backend
     };
 
     if (presensiType === "siswa") {
@@ -438,7 +458,7 @@ export default function AbsensiPage() {
 
         // Refresh values after saving
         if (presensiType === "siswa") {
-          const resAtt = await fetch(`/api/absensi?type=students&date=${selectedDate}&classId=${selectedClassId}`).then((r) => r.json());
+          const resAtt = await fetch(`/api/absensi?type=students&date=${selectedDate}&classId=${selectedClassId}&period_id=${periodId}`).then((r) => r.json());
           if (resAtt.success) {
             setStudents(resAtt.data);
             const initialMap: { [id: string]: string } = {};
@@ -448,7 +468,7 @@ export default function AbsensiPage() {
             setStudentAttMap(initialMap);
           }
         } else if (presensiType === "guru") {
-          const res = await fetch(`/api/absensi?type=teachers&date=${selectedDate}`).then((r) => r.json());
+          const res = await fetch(`/api/absensi?type=teachers&date=${selectedDate}&period_id=${periodId}`).then((r) => r.json());
           if (res.success) {
             setTeachersList(res.data);
             const initialMap: { [id: string]: { status: string; checkInTime: string; checkOutTime: string } } = {};
@@ -462,7 +482,7 @@ export default function AbsensiPage() {
             setTeacherAttMap(initialMap);
           }
         } else if (presensiType === "coach") {
-          const res = await fetch(`/api/absensi?type=coaches&date=${selectedDate}`).then((r) => r.json());
+          const res = await fetch(`/api/absensi?type=coaches&date=${selectedDate}&period_id=${periodId}`).then((r) => r.json());
           if (res.success) {
             setCoachesList(res.data);
             const initialMap: { [id: string]: { status: string; checkInTime: string; checkOutTime: string } } = {};
@@ -476,7 +496,7 @@ export default function AbsensiPage() {
             setCoachAttMap(initialMap);
           }
         } else if (presensiType === "ekskul") {
-          const res = await fetch(`/api/absensi?type=ekskul&date=${selectedDate}&extracurricularId=${selectedEkskulId}`).then((r) => r.json());
+          const res = await fetch(`/api/absensi?type=ekskul&date=${selectedDate}&extracurricularId=${selectedEkskulId}&period_id=${periodId}`).then((r) => r.json());
           if (res.success) {
             setEkskulStudents(res.data);
             const initialMap: { [id: string]: string } = {};
@@ -512,6 +532,9 @@ export default function AbsensiPage() {
       startDate,
       endDate
     });
+    if (periodId) {
+      queryParams.append("period_id", periodId);
+    }
 
     let titleText = "";
     let subTitleText = "";

@@ -8,7 +8,7 @@ export async function GET(
   try {
     const { id } = await params;
     const [rows]: any = await db.query(
-      "SELECT id, name, code, description FROM subjects WHERE id = ?",
+      "SELECT id, name, code, description, period_id FROM subjects WHERE id = ?",
       [id]
     );
 
@@ -36,7 +36,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const { name, code, description } = await request.json();
+    const { name, code, description, periodId } = await request.json();
 
     if (!name || !code) {
       return NextResponse.json(
@@ -45,9 +45,16 @@ export async function PUT(
       );
     }
 
+    // Ambil period_id saat ini jika tidak disediakan
+    let targetPeriodId = periodId;
+    if (!targetPeriodId) {
+      const [current]: any = await db.query("SELECT period_id FROM subjects WHERE id = ?", [id]);
+      targetPeriodId = current[0]?.period_id || null;
+    }
+
     const [result]: any = await db.query(
-      "UPDATE subjects SET name = ?, code = ?, description = ? WHERE id = ?",
-      [name, code, description || "", id]
+      "UPDATE subjects SET name = ?, code = ?, description = ?, period_id = ? WHERE id = ?",
+      [name, code, description || "", targetPeriodId, id]
     );
 
     if (result.affectedRows === 0) {
@@ -77,7 +84,7 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // Remove from class_subjects relation first to avoid foreign key constraints
+    // Hapus relasi class_subjects terlebih dahulu
     await db.query("DELETE FROM class_subjects WHERE subject_id = ?", [id]);
 
     const [result]: any = await db.query("DELETE FROM subjects WHERE id = ?", [id]);

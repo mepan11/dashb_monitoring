@@ -61,6 +61,7 @@ function ExtracurricularDetailContent() {
   const [students, setStudents] = useState<ParticipationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingStudents, setLoadingStudents] = useState(true);
+  const [periodId, setPeriodId] = useState<string>("");
 
   // Search & Filter & Pagination
   const [searchQuery, setSearchQuery] = useState("");
@@ -80,6 +81,21 @@ function ExtracurricularDetailContent() {
   const [selectedInitialStatus, setSelectedInitialStatus] = useState("Aktif");
   const [loadingAvailable, setLoadingAvailable] = useState(false);
   const [savingStudent, setSavingStudent] = useState(false);
+
+  // Mendengarkan perubahan periode akademik
+  useEffect(() => {
+    const cached = localStorage.getItem("active_period_id") || "";
+    setPeriodId(cached);
+
+    const handlePeriodChange = (e: any) => {
+      setPeriodId(e.detail.periodId || "");
+    };
+
+    window.addEventListener("academic_period_changed", handlePeriodChange);
+    return () => {
+      window.removeEventListener("academic_period_changed", handlePeriodChange);
+    };
+  }, []);
 
   const fetchDetail = useCallback(async () => {
     setLoading(true);
@@ -103,9 +119,10 @@ function ExtracurricularDetailContent() {
   }, [ekskulId]);
 
   const fetchStudents = useCallback(async () => {
+    if (!periodId) return;
     setLoadingStudents(true);
     try {
-      const res = await fetch(`/api/extracurriculars/${ekskulId}/students?search=${encodeURIComponent(searchQuery)}`);
+      const res = await fetch(`/api/extracurriculars/${ekskulId}/students?search=${encodeURIComponent(searchQuery)}&period_id=${periodId}`);
       const json = await res.json();
       if (json.success) {
         setStudents(json.data);
@@ -115,7 +132,7 @@ function ExtracurricularDetailContent() {
     } finally {
       setLoadingStudents(false);
     }
-  }, [ekskulId, searchQuery]);
+  }, [ekskulId, searchQuery, periodId]);
 
   useEffect(() => {
     fetchDetail();
@@ -145,11 +162,11 @@ function ExtracurricularDetailContent() {
 
   // Load available students when student modal opens
   useEffect(() => {
-    if (!isStudentModalOpen) return;
+    if (!isStudentModalOpen || !periodId) return;
     async function loadAvailable() {
       setLoadingAvailable(true);
       try {
-        const res = await fetch(`/api/students/available-ekskul?ekskulId=${ekskulId}`);
+        const res = await fetch(`/api/students/available-ekskul?ekskulId=${ekskulId}&period_id=${periodId}`);
         const json = await res.json();
         if (json.success) {
           setAvailableStudents(json.data);
@@ -161,12 +178,12 @@ function ExtracurricularDetailContent() {
       }
     }
     loadAvailable();
-  }, [isStudentModalOpen, ekskulId]);
+  }, [isStudentModalOpen, ekskulId, periodId]);
 
   // Reset page when search query changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, periodId]);
 
   const totalFiltered = students.length;
   const totalPages = Math.ceil(totalFiltered / LIMIT);

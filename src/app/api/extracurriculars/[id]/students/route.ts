@@ -7,15 +7,24 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const url = new URL(request.url);
+    const periodId = url.searchParams.get("period_id");
 
-    const [rows]: any = await db.query(
-      `SELECT s.id, s.name, s.gender_text, s.gender_code, s.nisn, s.class_label, s.status, es.status AS membershipStatus
-       FROM extracurricular_students es
-       JOIN students s ON es.student_id = s.id
-       WHERE es.extracurricular_id = ?
-       ORDER BY s.name ASC`,
-      [id]
-    );
+    let query = `
+      SELECT s.id, s.name, s.gender_text, s.gender_code, s.nisn, s.class_label, s.status, es.status AS membershipStatus
+      FROM extracurricular_students es
+      JOIN students s ON es.student_id = s.id
+      WHERE es.extracurricular_id = ?
+    `;
+    const queryParams: any[] = [id];
+    
+    if (periodId && periodId !== "undefined") {
+      query += " AND s.period_id = ?";
+      queryParams.push(periodId);
+    }
+    query += " ORDER BY s.name ASC";
+
+    const [rows]: any = await db.query(query, queryParams);
 
     return NextResponse.json({ success: true, data: rows });
   } catch (error: any) {

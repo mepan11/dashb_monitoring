@@ -12,7 +12,8 @@ export async function GET(
               c.homeroom_teacher_id AS homeroomTeacherId,
               c.capacity,
               c.academic_year AS academicYear,
-              c.semester
+              c.semester,
+              c.period_id AS periodId
        FROM classes c
        WHERE c.id = ?`,
       [id]
@@ -42,7 +43,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const { className, homeroomTeacherId, capacity, academicYear, semester } = await request.json();
+    const { className, homeroomTeacherId, capacity, academicYear, semester, periodId } = await request.json();
 
     if (!className) {
       return NextResponse.json(
@@ -51,11 +52,32 @@ export async function PUT(
       );
     }
 
+    // Ambil period_id saat ini jika tidak disediakan
+    let targetPeriodId = periodId;
+    if (!targetPeriodId) {
+      const [current]: any = await db.query("SELECT period_id FROM classes WHERE id = ?", [id]);
+      targetPeriodId = current[0]?.period_id || null;
+    }
+
+    let resolvedYear = academicYear;
+    let resolvedSemester = semester;
+
+    if (targetPeriodId) {
+      const [periodDetails]: any = await db.query(
+        "SELECT academic_year, semester FROM academic_periods WHERE id = ?",
+        [targetPeriodId]
+      );
+      if (periodDetails && periodDetails.length > 0) {
+        resolvedYear = periodDetails[0].academic_year;
+        resolvedSemester = periodDetails[0].semester;
+      }
+    }
+
     const [result]: any = await db.query(
       `UPDATE classes 
-       SET class_name = ?, homeroom_teacher_id = ?, capacity = ?, academic_year = ?, semester = ?
+       SET class_name = ?, homeroom_teacher_id = ?, capacity = ?, academic_year = ?, semester = ?, period_id = ?
        WHERE id = ?`,
-      [className, homeroomTeacherId || null, capacity || 32, academicYear || "2025/2026", semester || "Ganjil", id]
+      [className, homeroomTeacherId || null, capacity || 32, resolvedYear || "2025/2026", resolvedSemester || "Ganjil", targetPeriodId, id]
     );
 
     if (result.affectedRows === 0) {

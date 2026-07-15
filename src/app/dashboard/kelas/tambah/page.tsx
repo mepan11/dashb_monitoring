@@ -16,29 +16,59 @@ export default function TambahKelasPage() {
   const [className, setClassName] = useState("");
   const [homeroomTeacherId, setHomeroomTeacherId] = useState("");
   const [capacity, setCapacity] = useState(32);
-  const [academicYear, setAcademicYear] = useState("2025/2026");
-  const [semester, setSemester] = useState("Ganjil");
 
   const [teachers, setTeachers] = useState<TeacherOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [periodId, setPeriodId] = useState("");
+  const [periodName, setPeriodName] = useState("Memuat...");
 
+  // Mendengarkan perubahan periode akademik
   useEffect(() => {
-    async function fetchTeachers() {
+    const cached = localStorage.getItem("active_period_id") || "";
+    setPeriodId(cached);
+
+    const handlePeriodChange = (e: any) => {
+      setPeriodId(e.detail.periodId || "");
+    };
+
+    window.addEventListener("academic_period_changed", handlePeriodChange);
+    return () => {
+      window.removeEventListener("academic_period_changed", handlePeriodChange);
+    };
+  }, []);
+
+  // Fetch data guru & periode setiap kali periodId berubah
+  useEffect(() => {
+    if (!periodId) return;
+
+    async function fetchTeachersAndPeriod() {
       try {
-        const res = await fetch("/api/teachers");
-        const json = await res.json();
-        if (json.success) {
-          setTeachers(json.data);
+        const [teachRes, periodRes] = await Promise.all([
+          fetch(`/api/teachers?period_id=${periodId}`),
+          fetch("/api/periods")
+        ]);
+        const teachJson = await teachRes.json();
+        const periodJson = await periodRes.json();
+
+        if (teachJson.success) {
+          setTeachers(teachJson.data);
+        }
+
+        if (periodJson.success) {
+          const current = periodJson.data.find((p: any) => String(p.id) === String(periodId));
+          if (current) {
+            setPeriodName(`${current.academic_year} - ${current.semester}`);
+          }
         }
       } catch (err) {
-        console.error("Failed to fetch teachers:", err);
+        console.error("Failed to fetch page data:", err);
       } finally {
         setLoading(false);
       }
     }
-    fetchTeachers();
-  }, []);
+    fetchTeachersAndPeriod();
+  }, [periodId]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,8 +85,7 @@ export default function TambahKelasPage() {
           className,
           homeroomTeacherId: homeroomTeacherId ? Number(homeroomTeacherId) : null,
           capacity,
-          academicYear,
-          semester,
+          periodId, // Kirim periodId aktif
         }),
       });
       const data = await response.json();
@@ -111,10 +140,10 @@ export default function TambahKelasPage() {
 
       {/* Main split-column layout */}
       <div className="flex flex-col lg:flex-row gap-8 items-start">
-        
+
         {/* Left Column Form */}
         <form onSubmit={handleSave} className="flex-1 flex flex-col gap-6 w-full">
-          
+
           {/* Card 1: Data Rombongan Belajar */}
           <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-5">
             <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
@@ -168,29 +197,9 @@ export default function TambahKelasPage() {
                 />
               </div>
 
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tahun Ajaran</label>
-                <input
-                  type="text"
-                  placeholder="2025/2026"
-                  value={academicYear}
-                  onChange={(e) => setAcademicYear(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Semester</label>
-                <select
-                  value={semester}
-                  onChange={(e) => setSemester(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
-                >
-                  <option value="Ganjil">Ganjil</option>
-                  <option value="Genap">Genap</option>
-                </select>
+              <div className="flex flex-col gap-2 sm:col-span-2 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Periode Akademik Aktif</span>
+                <span className="text-sm font-bold text-slate-800">{periodName}</span>
               </div>
             </div>
           </div>
@@ -198,7 +207,7 @@ export default function TambahKelasPage() {
 
         {/* Right Column Tips */}
         <div className="w-full lg:w-[360px] flex flex-col gap-6 shrink-0">
-          
+
           <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-4">
             <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <Info className="w-4 h-4 text-blue-500" />
@@ -221,7 +230,6 @@ export default function TambahKelasPage() {
           </div>
 
         </div>
-
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Copy,
 } from "lucide-react";
 import { StatCard } from "@/components/ui/StatCard";
 import { Button } from "@/components/ui/Button";
@@ -41,14 +42,32 @@ export default function GuruPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [limit] = useState(5);
   const [loading, setLoading] = useState(true);
+  const [periodId, setPeriodId] = useState<string>("");
+  const [refetchTrigger, setRefetchTrigger] = useState(0);
+
+  // Mendengarkan perubahan periode akademik
+  React.useEffect(() => {
+    const cached = localStorage.getItem("active_period_id") || "";
+    setPeriodId(cached);
+
+    const handlePeriodChange = (e: any) => {
+      setPeriodId(e.detail.periodId || "");
+    };
+
+    window.addEventListener("academic_period_changed", handlePeriodChange);
+    return () => {
+      window.removeEventListener("academic_period_changed", handlePeriodChange);
+    };
+  }, []);
 
   React.useEffect(() => {
     async function fetchTeachers() {
+      if (!periodId) return;
       setLoading(true);
       try {
         const cleanStatus = selectedStatus === "Status: Aktif" ? "Aktif" : "Nonaktif";
         const mapelQuery = selectedMapel === "Semua Mata Pelajaran" ? "" : `&subject=${encodeURIComponent(selectedMapel)}`;
-        const res = await fetch(`/api/teachers?status=${cleanStatus}&page=${currentPage}&limit=${limit}${mapelQuery}`);
+        const res = await fetch(`/api/teachers?status=${cleanStatus}&page=${currentPage}&limit=${limit}&period_id=${periodId}${mapelQuery}`);
         const data = await res.json();
         if (data.success) {
           setTeachers(data.data);
@@ -62,7 +81,7 @@ export default function GuruPage() {
       }
     }
     fetchTeachers();
-  }, [selectedStatus, currentPage, limit, selectedMapel]);
+  }, [selectedStatus, currentPage, limit, selectedMapel, periodId, refetchTrigger]);
 
   // KPI Data
   const stats = [
@@ -97,6 +116,42 @@ export default function GuruPage() {
       iconColor: "text-slate-600",
     },
   ];
+
+  const [copying, setCopying] = useState(false);
+
+  const handleCopyPrevious = async () => {
+    if (!periodId) {
+      alert("Periode akademik aktif belum terdeteksi!");
+      return;
+    }
+    if (!confirm("Apakah Anda yakin ingin menyalin semua data guru dari periode sebelumnya ke periode aktif saat ini? NIP yang sudah ada di periode aktif tidak akan disalin ganda.")) {
+      return;
+    }
+    setCopying(true);
+    try {
+      const res = await fetch("/api/teachers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "copy_previous",
+          periodId,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(data.message);
+        setCurrentPage(1);
+        setRefetchTrigger((p) => p + 1);
+      } else {
+        alert(data.message || "Gagal menyalin data guru");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan koneksi");
+    } finally {
+      setCopying(false);
+    }
+  };
 
   const handleResetFilters = () => {
     setSelectedMapel("Semua Mata Pelajaran");
@@ -153,13 +208,24 @@ export default function GuruPage() {
           </p>
         </div>
 
-        {/* Add Teacher Button */}
-        <Link href="/dashboard/guru/tambah">
-          <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-semibold text-xs shadow-sm">
-            <Plus className="w-4 h-4" />
-            Tambah Guru
+        {/* Action Buttons */}
+        <div className="flex items-center gap-3 w-full md:w-auto self-stretch md:self-auto">
+          <Button
+            onClick={handleCopyPrevious}
+            disabled={copying}
+            className="!w-auto !py-2.5 !px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 text-xs font-semibold rounded-lg flex items-center gap-2 shadow-sm disabled:opacity-50"
+          >
+            <Copy className="w-4 h-4" />
+            {copying ? "Menyalin..." : "Salin Data Guru Periode Sebelumnya"}
           </Button>
-        </Link>
+
+          <Link href="/dashboard/guru/tambah" className="flex-1 md:flex-initial">
+            <Button className="!w-full md:!w-auto !py-2.5 !px-5 flex items-center justify-center gap-2 rounded-lg font-semibold text-xs shadow-sm bg-blue-600 hover:bg-blue-700 text-white">
+              <Plus className="w-4 h-4" />
+              Tambah Guru
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* KPI Cards Grid */}

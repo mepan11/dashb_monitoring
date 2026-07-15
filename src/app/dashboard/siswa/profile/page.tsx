@@ -43,12 +43,28 @@ function StudentProfileContent() {
 
   const [student, setStudent] = useState<Student | null>(null);
   const [loading, setLoading] = useState(true);
+  const [periodId, setPeriodId] = useState<string>("");
 
   useEffect(() => {
+    const cached = localStorage.getItem("active_period_id") || "";
+    setPeriodId(cached);
+
+    const handlePeriodChange = (e: any) => {
+      setPeriodId(e.detail.periodId || "");
+    };
+
+    window.addEventListener("academic_period_changed", handlePeriodChange);
+    return () => {
+      window.removeEventListener("academic_period_changed", handlePeriodChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!periodId) return;
     async function fetchStudent() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/students/${id}`);
+        const res = await fetch(`/api/students/${id}?period_id=${periodId}`);
         const json = await res.json();
         if (json.success) {
           setStudent(json.data);
@@ -60,7 +76,7 @@ function StudentProfileContent() {
       }
     }
     fetchStudent();
-  }, [id]);
+  }, [id, periodId]);
 
   const handleDelete = async () => {
     if (!student) return;

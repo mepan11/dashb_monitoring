@@ -4,15 +4,23 @@ import db from "@/lib/db";
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const currentClassName = url.searchParams.get("currentClass") || "";
+    const periodId = url.searchParams.get("period_id");
 
-    // Get all students where class_label is NOT the current class name
+    let targetPeriodId = periodId;
+    if (!targetPeriodId) {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      targetPeriodId = activePeriod[0]?.id || 1;
+    }
+
+    // Get all students in the period where class_label is NULL or empty (not assigned to any class yet)
     const [students]: any = await db.query(
       `SELECT id, name, nisn, class_label AS classLabel 
        FROM students 
-       WHERE class_label IS NULL OR class_label != ?
+       WHERE period_id = ? AND (class_label IS NULL OR class_label = '' OR class_label = '—')
        ORDER BY name ASC`,
-      [currentClassName]
+      [targetPeriodId]
     );
 
     return NextResponse.json({ success: true, data: students });

@@ -28,6 +28,22 @@ function TeacherProfileContent() {
 
   const [teacher, setTeacher] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [periodId, setPeriodId] = useState<string>("");
+
+  // Mendengarkan perubahan periode akademik
+  useEffect(() => {
+    const cached = localStorage.getItem("active_period_id") || "";
+    setPeriodId(cached);
+
+    const handlePeriodChange = (e: any) => {
+      setPeriodId(e.detail.periodId || "");
+    };
+
+    window.addEventListener("academic_period_changed", handlePeriodChange);
+    return () => {
+      window.removeEventListener("academic_period_changed", handlePeriodChange);
+    };
+  }, []);
 
   const handleDelete = async () => {
     if (!confirm("Apakah Anda yakin ingin menghapus data guru ini?")) {
@@ -53,10 +69,11 @@ function TeacherProfileContent() {
   };
 
   useEffect(() => {
+    if (!periodId) return;
     async function fetchProfile() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/teachers/${id}`);
+        const res = await fetch(`/api/teachers/${id}?period_id=${periodId}`);
         const json = await res.json();
         if (json.success) {
           setTeacher(json.data);
@@ -68,7 +85,7 @@ function TeacherProfileContent() {
       }
     }
     fetchProfile();
-  }, [id]);
+  }, [id, periodId]);
 
   if (loading) {
     return (

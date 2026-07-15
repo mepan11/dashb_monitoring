@@ -26,6 +26,11 @@ export default function TambahSiswaPage() {
   const [classLabel, setClassLabel] = useState("");
   const [status, setStatus] = useState("Aktif");
   const [saving, setSaving] = useState(false);
+  const [periodId, setPeriodId] = useState("");
+
+  React.useEffect(() => {
+    setPeriodId(localStorage.getItem("active_period_id") || "");
+  }, []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +45,7 @@ export default function TambahSiswaPage() {
           nisn,
           classLabel,
           status,
+          periodId,
         }),
       });
       const data = await response.json();
@@ -237,34 +243,17 @@ export default function TambahSiswaPage() {
               3. Penempatan Akademik
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kelas</label>
-                <select
-                  value={classLabel}
-                  onChange={(e) => setClassLabel(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
-                >
-                  <option value="">Pilih Kelas</option>
-                  {classOptions.map((cls) => (
-                    <option key={cls} value={cls}>{cls}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
-                >
-                  <option value="Aktif">Aktif</option>
-                  <option value="Nonaktif">Nonaktif</option>
-                </select>
-              </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status</label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                required
+                className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+              >
+                <option value="Aktif">Aktif</option>
+                <option value="Nonaktif">Nonaktif</option>
+              </select>
             </div>
           </div>
 

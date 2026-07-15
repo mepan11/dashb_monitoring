@@ -23,6 +23,7 @@ const LIMIT = 10;
 
 export default function MapelPage() {
   const [activeTab, setActiveTab] = useState<"master" | "class">("master");
+  const [periodId, setPeriodId] = useState<string>("");
   
   // Class Tab State
   const [selectedFilter, setSelectedFilter] = useState("Semua");
@@ -47,11 +48,27 @@ export default function MapelPage() {
   const [mapelDesc, setMapelDesc] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Mendengarkan perubahan periode akademik
+  useEffect(() => {
+    const cached = localStorage.getItem("active_period_id") || "";
+    setPeriodId(cached);
+
+    const handlePeriodChange = (e: any) => {
+      setPeriodId(e.detail.periodId || "");
+    };
+
+    window.addEventListener("academic_period_changed", handlePeriodChange);
+    return () => {
+      window.removeEventListener("academic_period_changed", handlePeriodChange);
+    };
+  }, []);
+
   // Fetch Class-based subjects
-  async function fetchClasses() {
+  async function fetchClasses(pid: string) {
+    if (!pid) return;
     setLoadingClasses(true);
     try {
-      const res = await fetch("/api/classes");
+      const res = await fetch(`/api/classes?period_id=${pid}`);
       const json = await res.json();
       if (json.success) {
         setClasses(json.data);
@@ -64,10 +81,11 @@ export default function MapelPage() {
   }
 
   // Fetch Master subjects
-  async function fetchSubjects() {
+  async function fetchSubjects(pid: string) {
+    if (!pid) return;
     setLoadingSubjects(true);
     try {
-      const res = await fetch("/api/subjects");
+      const res = await fetch(`/api/subjects?period_id=${pid}`);
       const json = await res.json();
       if (json.success) {
         setSubjects(json.data);
@@ -80,9 +98,11 @@ export default function MapelPage() {
   }
 
   useEffect(() => {
-    fetchSubjects();
-    fetchClasses();
-  }, []);
+    if (periodId) {
+      fetchSubjects(periodId);
+      fetchClasses(periodId);
+    }
+  }, [periodId]);
 
   const handleDeleteSubject = async (id: string, name: string) => {
     if (!confirm(`Hapus master mata pelajaran "${name}"? Tindakan ini juga akan menghapus seluruh distribusi mata pelajaran ini di kelas.`)) return;
@@ -90,8 +110,8 @@ export default function MapelPage() {
       const res = await fetch(`/api/subjects/${id}`, { method: "DELETE" });
       const json = await res.json();
       if (json.success) {
-        fetchSubjects();
-        fetchClasses(); // Update class subject counts
+        fetchSubjects(periodId);
+        fetchClasses(periodId); // Update class subject counts
       } else {
         alert(json.message || "Gagal menghapus mata pelajaran");
       }
@@ -136,13 +156,14 @@ export default function MapelPage() {
           name: mapelName,
           code: mapelCode,
           description: mapelDesc,
+          periodId, // Kirim periodId aktif ke backend
         }),
       });
       const json = await res.json();
       if (res.ok && json.success) {
         alert(modalMode === "add" ? "Mata pelajaran berhasil ditambahkan!" : "Mata pelajaran berhasil diperbarui!");
         setIsModalOpen(false);
-        fetchSubjects();
+        fetchSubjects(periodId);
       } else {
         alert(json.message || "Gagal menyimpan data");
       }

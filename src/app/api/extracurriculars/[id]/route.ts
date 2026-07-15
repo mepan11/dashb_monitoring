@@ -9,7 +9,7 @@ export async function GET(
     const { id } = await params;
     const [rows]: any = await db.query(
       `SELECT e.id, e.name, e.category, e.coach_id AS coachId, c.name AS coachName,
-              e.schedule, e.location, e.contact,
+              e.schedule, e.location, e.contact, e.period_id AS periodId,
               (SELECT COUNT(*) FROM extracurricular_students WHERE extracurricular_id = e.id) AS membersCount
        FROM extracurriculars e
        LEFT JOIN coaches c ON e.coach_id = c.id
@@ -41,7 +41,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const { name, category, coachId, schedule, location, contact } = await request.json();
+    const { name, category, coachId, schedule, location, contact, periodId } = await request.json();
 
     if (!name || !category || !schedule || !location || !contact) {
       return NextResponse.json(
@@ -50,11 +50,18 @@ export async function PUT(
       );
     }
 
+    // Ambil period_id saat ini jika tidak disediakan
+    let targetPeriodId = periodId;
+    if (!targetPeriodId) {
+      const [current]: any = await db.query("SELECT period_id FROM extracurriculars WHERE id = ?", [id]);
+      targetPeriodId = current[0]?.period_id || null;
+    }
+
     const [result]: any = await db.query(
       `UPDATE extracurriculars 
-       SET name = ?, category = ?, coach_id = ?, schedule = ?, location = ?, contact = ?
+       SET name = ?, category = ?, coach_id = ?, schedule = ?, location = ?, contact = ?, period_id = ?
        WHERE id = ?`,
-      [name, category, coachId || null, schedule, location, contact, id]
+      [name, category, coachId || null, schedule, location, contact, targetPeriodId, id]
     );
 
     if (result.affectedRows === 0) {

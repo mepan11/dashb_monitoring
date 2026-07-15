@@ -14,6 +14,7 @@ import {
   UserCog,
   LogOut,
   Shield,
+  Calendar,
 } from "lucide-react";
 
 export const Sidebar: React.FC = () => {
@@ -29,6 +30,7 @@ export const Sidebar: React.FC = () => {
     { name: "Absensi", href: "/dashboard/absensi", icon: CalendarCheck },
     { name: "Nilai", href: "/dashboard/nilai", icon: FileBarChart2 },
     { name: "Ekstrakurikuler", href: "/dashboard/ekstrakurikuler", icon: Activity },
+    { name: "Periode Akademik", href: "/dashboard/periode", icon: Calendar },
     { name: "Kelola Akun", href: "/dashboard/kelola-akun", icon: UserCog },
   ];
 

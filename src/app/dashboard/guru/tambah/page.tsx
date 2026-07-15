@@ -35,12 +35,21 @@ export default function TambahGuruPage() {
   // Dynamic dropdown addition states
   const [showAddSubject, setShowAddSubject] = useState(false);
   const [showAddClass, setShowAddClass] = useState(false);
+  const [periodId, setPeriodId] = useState("");
+
+  React.useEffect(() => {
+    setPeriodId(localStorage.getItem("active_period_id") || "");
+  }, []);
 
   const availableSubjectsList = ["Matematika", "Bahasa Inggris", "Ilmu Pengetahuan Alam"];
   const availableClassesList = ["Kelas 4-C", "Kelas 5-B", "Kelas 6-A"];
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!periodId) {
+      alert("Silakan pilih periode akademik di topbar terlebih dahulu!");
+      return;
+    }
     try {
       const response = await fetch("/api/teachers", {
         method: "POST",
@@ -55,7 +64,8 @@ export default function TambahGuruPage() {
           homeroomClass: isHomeroom ? homeroomClass : null,
           subjects,
           classes,
-          specialization: "Akademik"
+          specialization: "Akademik",
+          periodId // Kirim periodId aktif
         }),
       });
 

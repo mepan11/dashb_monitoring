@@ -7,6 +7,16 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const url = new URL(request.url);
+    const periodId = url.searchParams.get("period_id");
+
+    let activePeriodId = periodId;
+    if (!activePeriodId || activePeriodId === "undefined") {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
+    }
 
     // 1. Fetch teacher master data
     const [teacherRows]: any = await db.query("SELECT * FROM teachers WHERE id = ?", [id]);
@@ -20,22 +30,23 @@ export async function GET(
 
     const teacher = teacherRows[0];
 
-    // 2. Fetch homeroom class status
+    // 2. Fetch homeroom class status filtered by period
     const [classRows]: any = await db.query(
-      "SELECT id, class_name FROM classes WHERE homeroom_teacher_id = ?",
-      [id]
+      "SELECT id, class_name FROM classes WHERE homeroom_teacher_id = ? AND period_id = ?",
+      [id, activePeriodId]
     );
     const homeroomClass = classRows[0] || null;
 
-    // 3. Fetch subjects and classes taught by teacher
+    // 3. Fetch subjects and classes taught by teacher filtered by period
     const [classSubjectsRows]: any = await db.query(
       `
       SELECT DISTINCT s.name AS subject_name 
       FROM class_subjects cs 
       JOIN subjects s ON cs.subject_id = s.id 
-      WHERE cs.teacher_id = ?
+      JOIN classes c ON cs.class_id = c.id
+      WHERE cs.teacher_id = ? AND c.period_id = ? AND s.period_id = ?
       `,
-      [id]
+      [id, activePeriodId, activePeriodId]
     );
 
     const [taughtClassesRows]: any = await db.query(
@@ -43,38 +54,39 @@ export async function GET(
       SELECT DISTINCT c.class_name 
       FROM class_subjects cs 
       JOIN classes c ON cs.class_id = c.id 
-      WHERE cs.teacher_id = ?
+      WHERE cs.teacher_id = ? AND c.period_id = ?
       `,
-      [id]
+      [id, activePeriodId]
     );
 
     const subjects = classSubjectsRows.map((r: any) => r.subject_name);
     const classes = taughtClassesRows.map((r: any) => r.class_name);
 
-    // 4. Fetch and calculate teacher attendance percentage
+    // 4. Fetch and calculate teacher attendance percentage filtered by period
     const [attRows]: any = await db.query(
       `
       SELECT 
         COUNT(*) AS total,
         SUM(CASE WHEN status IN ('Hadir', 'Terlambat') THEN 1 ELSE 0 END) AS present
       FROM teacher_attendance 
-      WHERE teacher_id = ?
+      WHERE teacher_id = ? AND period_id = ?
       `,
-      [id]
+      [id, activePeriodId]
     );
     const attTotal = attRows[0]?.total || 0;
     const attPresent = attRows[0]?.present || 0;
     const attendanceRate = attTotal > 0 ? ((attPresent / attTotal) * 100).toFixed(1) : "0.0";
 
-    // 5. Fetch and calculate average grade of students taught by this teacher
+    // 5. Fetch and calculate average grade of students taught by this teacher filtered by period
     const [gradeRows]: any = await db.query(
       `
       SELECT AVG(g.average) AS avg_score 
       FROM grades g 
       JOIN class_subjects cs ON g.class_id = cs.class_id 
-      WHERE cs.teacher_id = ?
+      JOIN classes c ON g.class_id = c.id
+      WHERE cs.teacher_id = ? AND c.period_id = ?
       `,
-      [id]
+      [id, activePeriodId]
     );
     const averageScore = gradeRows[0]?.avg_score ? parseFloat(gradeRows[0].avg_score).toFixed(1) : "0.0";
 
@@ -84,7 +96,7 @@ export async function GET(
       ? `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase()
       : `${nameParts[0][0] || "G"}`.toUpperCase();
 
-    // Mock additional profile details not present in teachers table
+    // Mock additional profile details
     const profileDetails = {
       phone: "+62 812-3456-7890",
       joinDate: "15 Januari 2010",
@@ -133,7 +145,8 @@ export async function PUT(
       isHomeroom,
       homeroomClass,
       subjects,
-      classes
+      classes,
+      periodId
     } = await request.json();
 
     if (!name || !email || !nip) {
@@ -141,6 +154,15 @@ export async function PUT(
         { success: false, message: "Nama, Email, dan NIP wajib diisi" },
         { status: 400 }
       );
+    }
+
+    // Resolusi periodId
+    let activePeriodId = periodId;
+    if (!activePeriodId) {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
     }
 
     // --- BUSINESS RULE VALIDATIONS ---
@@ -152,9 +174,9 @@ export async function PUT(
         SELECT c.homeroom_teacher_id, t.name AS teacher_name 
         FROM classes c 
         JOIN teachers t ON c.homeroom_teacher_id = t.id 
-        WHERE c.class_name = ? AND c.homeroom_teacher_id IS NOT NULL AND c.homeroom_teacher_id != ?
+        WHERE c.class_name = ? AND c.period_id = ? AND c.homeroom_teacher_id IS NOT NULL AND c.homeroom_teacher_id != ?
         `,
-        [targetClassName, id]
+        [targetClassName, activePeriodId, id]
       );
       if (hrCheck && hrCheck.length > 0) {
         return NextResponse.json(
@@ -168,8 +190,8 @@ export async function PUT(
     if (isHomeroom) {
       const targetClassName = homeroomClass.startsWith("Kelas") ? homeroomClass : `Kelas ${homeroomClass}`;
       const [teacherHrCheck]: any = await db.query(
-        "SELECT class_name FROM classes WHERE homeroom_teacher_id = ? AND class_name != ?",
-        [id, targetClassName]
+        "SELECT class_name FROM classes WHERE homeroom_teacher_id = ? AND period_id = ? AND class_name != ?",
+        [id, activePeriodId, targetClassName]
       );
       if (teacherHrCheck && teacherHrCheck.length > 0) {
         return NextResponse.json(
@@ -183,12 +205,12 @@ export async function PUT(
     if (Array.isArray(subjects) && Array.isArray(classes)) {
       for (const className of classes) {
         const targetClassName = className.startsWith("Kelas") ? className : `Kelas ${className}`;
-        const [cRows]: any = await db.query("SELECT id FROM classes WHERE class_name = ?", [targetClassName]);
+        const [cRows]: any = await db.query("SELECT id FROM classes WHERE class_name = ? AND period_id = ?", [targetClassName, activePeriodId]);
         const classId = cRows[0]?.id;
 
         if (classId) {
           for (const subjectName of subjects) {
-            const [sRows]: any = await db.query("SELECT id FROM subjects WHERE name = ?", [subjectName]);
+            const [sRows]: any = await db.query("SELECT id FROM subjects WHERE name = ? AND period_id = ?", [subjectName, activePeriodId]);
             const subjectId = sRows[0]?.id;
 
             if (subjectId) {
@@ -216,7 +238,7 @@ export async function PUT(
       }
     }
 
-    // 1. Update teacher master data in database
+    // 1. Update teacher master data
     const [result]: any = await db.query(
       `
       UPDATE teachers 
@@ -234,33 +256,36 @@ export async function PUT(
     }
 
     // 2. Manage Homeroom assignment
-    // Reset this teacher's homeroom responsibility from all classes
-    await db.query("UPDATE classes SET homeroom_teacher_id = NULL WHERE homeroom_teacher_id = ?", [id]);
+    // Reset this teacher's homeroom responsibility from all classes in this period
+    await db.query("UPDATE classes SET homeroom_teacher_id = NULL WHERE homeroom_teacher_id = ? AND period_id = ?", [id, activePeriodId]);
 
     if (isHomeroom && homeroomClass) {
-      // Set teacher as homeroom of target class (e.g. "Kelas 4-C")
-      // Clean string class name just in case
       const targetClassName = homeroomClass.startsWith("Kelas") ? homeroomClass : `Kelas ${homeroomClass}`;
       await db.query(
-        "UPDATE classes SET homeroom_teacher_id = ? WHERE class_name = ?",
-        [id, targetClassName]
+        "UPDATE classes SET homeroom_teacher_id = ? WHERE class_name = ? AND period_id = ?",
+        [id, targetClassName, activePeriodId]
       );
     }
 
-    // 3. Manage Class Subjects taught mapping
+    // 3. Manage Class Subjects taught mapping for this period
     if (Array.isArray(subjects) && Array.isArray(classes)) {
-      // Clear existing records
-      await db.query("DELETE FROM class_subjects WHERE teacher_id = ?", [id]);
+      // Clear existing records for this period
+      await db.query(
+        `DELETE cs FROM class_subjects cs
+         JOIN classes c ON cs.class_id = c.id
+         WHERE cs.teacher_id = ? AND c.period_id = ?`,
+        [id, activePeriodId]
+      );
 
       // Resolve class and subject IDs to insert
       for (const className of classes) {
         const targetClassName = className.startsWith("Kelas") ? className : `Kelas ${className}`;
-        const [cRows]: any = await db.query("SELECT id FROM classes WHERE class_name = ?", [targetClassName]);
+        const [cRows]: any = await db.query("SELECT id FROM classes WHERE class_name = ? AND period_id = ?", [targetClassName, activePeriodId]);
         const classId = cRows[0]?.id;
 
         if (classId) {
           for (const subjectName of subjects) {
-            const [sRows]: any = await db.query("SELECT id FROM subjects WHERE name = ?", [subjectName]);
+            const [sRows]: any = await db.query("SELECT id FROM subjects WHERE name = ? AND period_id = ?", [subjectName, activePeriodId]);
             const subjectId = sRows[0]?.id;
 
             if (subjectId) {
@@ -294,7 +319,7 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // Delete teacher from database
+    // Delete teacher
     const [result]: any = await db.query("DELETE FROM teachers WHERE id = ?", [id]);
 
     if (result.affectedRows === 0) {
@@ -316,5 +341,3 @@ export async function DELETE(
     );
   }
 }
-
-

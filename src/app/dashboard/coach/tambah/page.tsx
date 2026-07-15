@@ -29,9 +29,18 @@ export default function TambahCoachPage() {
   const [ekskul, setEkskul] = useState("");
   const [schedule, setSchedule] = useState("Selasa, Kamis");
   const [location, setLocation] = useState("Lab Komputer 2, Ruang Robotik");
+  const [periodId, setPeriodId] = useState("");
+
+  React.useEffect(() => {
+    setPeriodId(localStorage.getItem("active_period_id") || "");
+  }, []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!periodId) {
+      alert("Silakan pilih periode akademik di topbar terlebih dahulu!");
+      return;
+    }
     try {
       const response = await fetch("/api/coaches", {
         method: "POST",
@@ -47,6 +56,7 @@ export default function TambahCoachPage() {
           status: "Aktif",
           schedule,
           location,
+          periodId // Kirim periodId aktif
         }),
       });
 

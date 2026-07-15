@@ -39,6 +39,7 @@ export default function SiswaPage() {
   const [stats, setStats] = useState<Stats>({ total: 0, active: 0, male: 0, female: 0 });
   const [filteredTotal, setFilteredTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [periodId, setPeriodId] = useState<string>("");
 
   const [selectedClassFilter, setSelectedClassFilter] = useState("Semua");
   const [selectedGender, setSelectedGender] = useState("Semua");
@@ -48,7 +49,23 @@ export default function SiswaPage() {
 
   const classFilters = ["Semua", "Kelas 1", "Kelas 2", "Kelas 3", "Kelas 4", "Kelas 5", "Kelas 6"];
 
+  // Mendengarkan perubahan periode akademik
+  useEffect(() => {
+    const cached = localStorage.getItem("active_period_id") || "";
+    setPeriodId(cached);
+
+    const handlePeriodChange = (e: any) => {
+      setPeriodId(e.detail.periodId || "");
+    };
+
+    window.addEventListener("academic_period_changed", handlePeriodChange);
+    return () => {
+      window.removeEventListener("academic_period_changed", handlePeriodChange);
+    };
+  }, []);
+
   const fetchStudents = useCallback(async () => {
+    if (!periodId) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -57,6 +74,7 @@ export default function SiswaPage() {
       if (selectedGender !== "Semua") params.set("gender", selectedGender);
       params.set("page", String(currentPage));
       params.set("limit", String(LIMIT));
+      params.set("period_id", periodId);
 
       const res = await fetch(`/api/students?${params.toString()}`);
       const json = await res.json();
@@ -70,7 +88,7 @@ export default function SiswaPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, selectedClassFilter, selectedGender, currentPage]);
+  }, [search, selectedClassFilter, selectedGender, currentPage, periodId]);
 
   useEffect(() => {
     fetchStudents();
@@ -79,7 +97,7 @@ export default function SiswaPage() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, selectedClassFilter, selectedGender]);
+  }, [search, selectedClassFilter, selectedGender, periodId]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,8 +1,82 @@
-import React from "react";
-import { Search, Bell, Settings } from "lucide-react";
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { Search, Bell, Settings, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
+interface AcademicPeriod {
+  id: number;
+  academic_year: string;
+  semester: string;
+  is_active: boolean;
+  academicYear?: string;
+  isActive?: boolean;
+}
+
 export const Header: React.FC = () => {
+  const [periods, setPeriods] = useState<AcademicPeriod[]>([]);
+  const [selectedPeriodId, setSelectedPeriodId] = useState<string>("");
+
+  useEffect(() => {
+    async function fetchPeriods() {
+      try {
+        const res = await fetch("/api/periods");
+        const json = await res.json();
+        if (json.success) {
+          setPeriods(json.data);
+          
+          // Cari periode aktif dari DB
+          const active = json.data.find((p: AcademicPeriod) => p.is_active || p.isActive);
+          
+          // Cek apakah sudah ada pilihan di localStorage
+          const cached = localStorage.getItem("active_period_id");
+          if (cached) {
+            setSelectedPeriodId(cached);
+          } else if (active) {
+            setSelectedPeriodId(String(active.id));
+            localStorage.setItem("active_period_id", String(active.id));
+          } else if (json.data.length > 0) {
+            setSelectedPeriodId(String(json.data[0].id));
+            localStorage.setItem("active_period_id", String(json.data[0].id));
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load periods in Header:", err);
+      }
+    }
+    fetchPeriods();
+
+    // Jalankan sinkronisasi realtime saat active_period_id diset aktif dari halaman lain
+    const handlePeriodChange = (e: any) => {
+      if (e.detail && e.detail.periodId) {
+        setSelectedPeriodId(String(e.detail.periodId));
+      }
+    };
+
+    // Jalankan fetch ulang daftar periode jika ada penambahan/perubahan list periode
+    const handlePeriodsUpdated = () => {
+      fetchPeriods();
+    };
+
+    window.addEventListener("academic_period_changed", handlePeriodChange);
+    window.addEventListener("academic_periods_updated", handlePeriodsUpdated);
+
+    return () => {
+      window.removeEventListener("academic_period_changed", handlePeriodChange);
+      window.removeEventListener("academic_periods_updated", handlePeriodsUpdated);
+    };
+  }, []);
+
+  const handlePeriodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setSelectedPeriodId(val);
+    localStorage.setItem("active_period_id", val);
+    
+    // Pemicu custom event agar komponen/halaman lain tahu periode diubah
+    const event = new CustomEvent("academic_period_changed", { detail: { periodId: val } });
+    window.dispatchEvent(event);
+  };
+
   return (
     <header className="h-16 border-b border-slate-200/50 px-8 flex items-center justify-between bg-white shrink-0">
       {/* Search Input */}
@@ -19,6 +93,22 @@ export const Header: React.FC = () => {
 
       {/* Action Controls */}
       <div className="flex items-center gap-4">
+        {/* Dropdown Periode Akademik */}
+        <div className="flex items-center gap-2 border border-slate-200 bg-[#f8fafc] px-3 py-1.5 rounded-xl">
+          <Calendar className="w-3.5 h-3.5 text-blue-600" />
+          <select
+            value={selectedPeriodId}
+            onChange={handlePeriodChange}
+            className="text-xs font-bold text-slate-700 bg-transparent border-none outline-none cursor-pointer focus:ring-0"
+          >
+            {periods.map((p) => (
+              <option key={p.id} value={p.id}>
+                TA {p.academic_year} - {p.semester}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Portal Sekolah Button */}
         <Button
           variant="secondary"

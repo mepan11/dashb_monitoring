@@ -7,6 +7,17 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const url = new URL(request.url);
+    const periodId = url.searchParams.get("period_id");
+
+    let activePeriodId = periodId;
+    if (!activePeriodId || activePeriodId === "undefined") {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
+    }
+
     const [rows]: any = await db.query(
       "SELECT id, name, email, id_number AS idNumber, specialization, contact, status, schedule, location FROM coaches WHERE id = ?",
       [id]
@@ -20,16 +31,16 @@ export async function GET(
       );
     }
 
-    // Fetch and calculate coach attendance percentage
+    // Fetch and calculate coach attendance percentage filtered by period_id
     const [attRows]: any = await db.query(
       `
       SELECT 
         COUNT(*) AS total,
         SUM(CASE WHEN status IN ('Hadir', 'Terlambat') THEN 1 ELSE 0 END) AS present
       FROM coach_attendance 
-      WHERE coach_id = ?
+      WHERE coach_id = ? AND period_id = ?
       `,
-      [id]
+      [id, activePeriodId]
     );
     const attTotal = attRows[0]?.total || 0;
     const attPresent = attRows[0]?.present || 0;

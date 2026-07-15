@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
+  Copy,
 } from "lucide-react";
 import { StatCard } from "@/components/ui/StatCard";
 import { Button } from "@/components/ui/Button";
@@ -43,9 +44,27 @@ export default function CoachPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [limit] = useState(5);
   const [loading, setLoading] = useState(true);
+  const [periodId, setPeriodId] = useState<string>("");
+  const [refetchTrigger, setRefetchTrigger] = useState(0);
+
+  // Mendengarkan perubahan periode akademik
+  useEffect(() => {
+    const cached = localStorage.getItem("active_period_id") || "";
+    setPeriodId(cached);
+
+    const handlePeriodChange = (e: any) => {
+      setPeriodId(e.detail.periodId || "");
+    };
+
+    window.addEventListener("academic_period_changed", handlePeriodChange);
+    return () => {
+      window.removeEventListener("academic_period_changed", handlePeriodChange);
+    };
+  }, []);
 
   useEffect(() => {
     async function fetchCoaches() {
+      if (!periodId) return;
       setLoading(true);
       try {
         const cleanStatus = selectedStatus === "Status: Aktif" ? "Aktif" : selectedStatus === "Status: Non-Aktif" ? "Non-Aktif" : "Semua";
@@ -55,6 +74,7 @@ export default function CoachPage() {
           status: cleanStatus,
           specialization: selectedBidang,
           search: searchQuery,
+          period_id: periodId,
         });
         const res = await fetch(`/api/coaches?${queryParams.toString()}`);
         const data = await res.json();
@@ -70,7 +90,43 @@ export default function CoachPage() {
       }
     }
     fetchCoaches();
-  }, [selectedBidang, selectedStatus, searchQuery, currentPage, limit]);
+  }, [selectedBidang, selectedStatus, searchQuery, currentPage, limit, periodId, refetchTrigger]);
+
+  const [copying, setCopying] = useState(false);
+
+  const handleCopyPrevious = async () => {
+    if (!periodId) {
+      alert("Periode akademik aktif belum terdeteksi!");
+      return;
+    }
+    if (!confirm("Apakah Anda yakin ingin menyalin semua data coach dari periode sebelumnya ke periode aktif saat ini? ID Number yang sudah ada di periode aktif tidak akan disalin ganda.")) {
+      return;
+    }
+    setCopying(true);
+    try {
+      const res = await fetch("/api/coaches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "copy_previous",
+          periodId,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(data.message);
+        setCurrentPage(1);
+        setRefetchTrigger((p) => p + 1);
+      } else {
+        alert(data.message || "Gagal menyalin data coach");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan koneksi");
+    } finally {
+      setCopying(false);
+    }
+  };
 
   const handleResetFilters = () => {
     setSelectedBidang("Semua Bidang");
@@ -171,13 +227,24 @@ export default function CoachPage() {
           </p>
         </div>
 
-        {/* Add Coach Button */}
-        <Link href="/dashboard/coach/tambah">
-          <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-semibold text-xs shadow-sm">
-            <Plus className="w-4 h-4" />
-            Tambah Coach Baru
+        {/* Action Buttons */}
+        <div className="flex items-center gap-3 w-full md:w-auto self-stretch md:self-auto">
+          <Button
+            onClick={handleCopyPrevious}
+            disabled={copying}
+            className="!w-auto !py-2.5 !px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 text-xs font-semibold rounded-lg flex items-center gap-2 shadow-sm disabled:opacity-50"
+          >
+            <Copy className="w-4 h-4" />
+            {copying ? "Menyalin..." : "Salin Data Coach Periode Sebelumnya"}
           </Button>
-        </Link>
+
+          <Link href="/dashboard/coach/tambah" className="flex-1 md:flex-initial">
+            <Button className="!w-full md:!w-auto !py-2.5 !px-5 flex items-center justify-center gap-2 rounded-lg font-semibold text-xs shadow-sm bg-blue-600 hover:bg-blue-700 text-white">
+              <Plus className="w-4 h-4" />
+              Tambah Coach Baru
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* KPI Cards Grid */}

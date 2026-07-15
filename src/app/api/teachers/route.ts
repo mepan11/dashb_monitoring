@@ -7,12 +7,21 @@ export async function GET(request: Request) {
     const search = url.searchParams.get("search") || "";
     const statusFilter = url.searchParams.get("status") || "";
     const subjectFilter = url.searchParams.get("subject") || "";
+    const periodId = url.searchParams.get("period_id");
 
-    // 1. Fetch counts/statistics
-    const [totalRes]: any = await db.query("SELECT COUNT(*) AS count FROM teachers");
-    const [activeRes]: any = await db.query("SELECT COUNT(*) AS count FROM teachers WHERE status = 'Aktif'");
-    const [akademikRes]: any = await db.query("SELECT COUNT(*) AS count FROM teachers WHERE specialization = 'Akademik'");
-    const [nonAkademikRes]: any = await db.query("SELECT COUNT(*) AS count FROM teachers WHERE specialization = 'Non-Akademik'");
+    let activePeriodId = periodId;
+    if (!activePeriodId || activePeriodId === "undefined") {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
+    }
+
+    // 1. Fetch counts/statistics filtered by period
+    const [totalRes]: any = await db.query("SELECT COUNT(*) AS count FROM teachers WHERE period_id = ?", [activePeriodId]);
+    const [activeRes]: any = await db.query("SELECT COUNT(*) AS count FROM teachers WHERE status = 'Aktif' AND period_id = ?", [activePeriodId]);
+    const [akademikRes]: any = await db.query("SELECT COUNT(*) AS count FROM teachers WHERE specialization = 'Akademik' AND period_id = ?", [activePeriodId]);
+    const [nonAkademikRes]: any = await db.query("SELECT COUNT(*) AS count FROM teachers WHERE specialization = 'Non-Akademik' AND period_id = ?", [activePeriodId]);
 
     const stats = {
       total: totalRes[0]?.count || 0,
@@ -21,7 +30,7 @@ export async function GET(request: Request) {
       nonAkademik: nonAkademikRes[0]?.count || 0,
     };
 
-    // 2. Fetch list of teachers with their subjects and classes using GROUP_CONCAT
+    // 2. Fetch list of teachers with their subjects and classes for the selected period
     let query = `
       SELECT 
         t.id, 
@@ -34,16 +43,18 @@ export async function GET(request: Request) {
         COALESCE(GROUP_CONCAT(DISTINCT c.class_name SEPARATOR ', '), '—') AS classes 
       FROM teachers t 
       LEFT JOIN class_subjects cs ON t.id = cs.teacher_id 
-      LEFT JOIN subjects s ON cs.subject_id = s.id 
-      LEFT JOIN classes c ON cs.class_id = c.id
+      LEFT JOIN subjects s ON cs.subject_id = s.id AND s.period_id = ?
+      LEFT JOIN classes c ON cs.class_id = c.id AND c.period_id = ?
     `;
 
+    const hasLimit = url.searchParams.has("limit");
     const page = parseInt(url.searchParams.get("page") || "1", 10);
     const limit = parseInt(url.searchParams.get("limit") || "10", 10);
     const offset = (page - 1) * limit;
 
-    const queryParams: any[] = [];
-    const conditions: string[] = [];
+    const queryParams: any[] = [activePeriodId, activePeriodId];
+    const conditions: string[] = ["t.period_id = ?"];
+    queryParams.push(activePeriodId);
 
     if (search) {
       conditions.push("(t.name LIKE ? OR t.nip LIKE ? OR t.email LIKE ?)");
@@ -56,8 +67,8 @@ export async function GET(request: Request) {
     }
 
     if (subjectFilter) {
-      conditions.push("t.id IN (SELECT cs_sub.teacher_id FROM class_subjects cs_sub JOIN subjects s_sub ON cs_sub.subject_id = s_sub.id WHERE s_sub.name = ?)");
-      queryParams.push(subjectFilter);
+      conditions.push("t.id IN (SELECT cs_sub.teacher_id FROM class_subjects cs_sub JOIN subjects s_sub ON cs_sub.subject_id = s_sub.id WHERE s_sub.name = ? AND s_sub.period_id = ?)");
+      queryParams.push(subjectFilter, activePeriodId);
     }
 
     // Get total count of filtered records
@@ -65,17 +76,20 @@ export async function GET(request: Request) {
     if (conditions.length > 0) {
       countQuery += " WHERE " + conditions.join(" AND ");
     }
-    const [countRows]: any = await db.query(countQuery, queryParams);
+    const [countRows]: any = await db.query(countQuery, queryParams.slice(2)); // Skip the first two periodId params
     const filteredTotal = countRows[0]?.count || 0;
 
     if (conditions.length > 0) {
       query += " WHERE " + conditions.join(" AND ");
     }
 
-    query += " GROUP BY t.id ORDER BY t.id ASC LIMIT ? OFFSET ?";
-    
-    // Create query parameter array with limit and offset
-    const finalParams = [...queryParams, limit, offset];
+    let finalParams = [...queryParams];
+    if (hasLimit) {
+      query += " GROUP BY t.id ORDER BY t.id ASC LIMIT ? OFFSET ?";
+      finalParams.push(limit, offset);
+    } else {
+      query += " GROUP BY t.id ORDER BY t.id ASC";
+    }
 
     const [teachersRows]: any = await db.query(query, finalParams);
 
@@ -106,7 +120,7 @@ export async function GET(request: Request) {
       filteredTotal,
     });
   } catch (error: any) {
-    console.error("Teachers API Error:", error);
+    console.error("Teachers API GET Error:", error);
     return NextResponse.json(
       { success: false, message: "Terjadi kesalahan internal pada server" },
       { status: 500 }
@@ -116,136 +130,111 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { 
-      name, 
-      email, 
-      nip, 
-      specialization,
-      isHomeroom,
-      homeroomClass,
-      subjects,
-      classes
-    } = await request.json();
+    const body = await request.json();
+    
+    // Fitur Salin Data Guru Periode Sebelumnya
+    if (body.action === "copy_previous") {
+      const targetPeriodId = body.periodId;
+      if (!targetPeriodId) {
+        return NextResponse.json(
+          { success: false, message: "Period ID tujuan wajib disertakan" },
+          { status: 400 }
+        );
+      }
 
-    if (!name || !email || !nip) {
+      // Cari periode akademik dengan ID yang lebih kecil (periode sebelumnya)
+      const [prevPeriods]: any = await db.query(
+        "SELECT id, academic_year, semester FROM academic_periods WHERE id < ? ORDER BY id DESC LIMIT 1",
+        [targetPeriodId]
+      );
+
+      if (prevPeriods.length === 0) {
+        return NextResponse.json(
+          { success: false, message: "Tidak ditemukan periode akademik sebelumnya untuk disalin" },
+          { status: 400 }
+        );
+      }
+
+      const prevPeriodId = prevPeriods[0].id;
+
+      // Ambil data guru dari periode sebelumnya
+      const [prevTeachers]: any = await db.query(
+        "SELECT name, email, nip, specialization, status FROM teachers WHERE period_id = ?",
+        [prevPeriodId]
+      );
+
+      if (prevTeachers.length === 0) {
+        return NextResponse.json(
+          { success: false, message: `Tidak ada data guru pada periode sebelumnya (${prevPeriods[0].academic_year} - ${prevPeriods[0].semester})` },
+          { status: 400 }
+        );
+      }
+
+      // Cek apakah target period sudah memiliki guru agar tidak duplikasi
+      const [existingTeachers]: any = await db.query(
+        "SELECT nip FROM teachers WHERE period_id = ?",
+        [targetPeriodId]
+      );
+      const existingNips = new Set(existingTeachers.map((t: any) => String(t.nip)));
+
+      let copiedCount = 0;
+      for (const t of prevTeachers) {
+        if (!existingNips.has(String(t.nip))) {
+          await db.query(
+            `INSERT INTO teachers (name, email, nip, specialization, status, period_id)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [t.name, t.email, t.nip, t.specialization, t.status, targetPeriodId]
+          );
+          copiedCount++;
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Berhasil menyalin ${copiedCount} data guru dari periode sebelumnya (${prevPeriods[0].academic_year} - ${prevPeriods[0].semester})`,
+      });
+    }
+
+    // Alur Insert Guru Tunggal
+    const { name, email, nip, specialization, status, periodId } = body;
+
+    if (!name || !email || !nip || !periodId) {
       return NextResponse.json(
-        { success: false, message: "Nama, Email, dan NIP wajib diisi" },
+        { success: false, message: "Nama, Email, NIP, dan Periode Akademik wajib diisi" },
         { status: 400 }
       );
     }
 
-    // --- BUSINESS RULE VALIDATIONS ---
-    // Rule 2: WALI KELAS = HANYA 1 per ROMBEL
-    if (isHomeroom && homeroomClass) {
-      const targetClassName = homeroomClass.startsWith("Kelas") ? homeroomClass : `Kelas ${homeroomClass}`;
-      const [hrCheck]: any = await db.query(
-        `
-        SELECT c.homeroom_teacher_id, t.name AS teacher_name 
-        FROM classes c 
-        JOIN teachers t ON c.homeroom_teacher_id = t.id 
-        WHERE c.class_name = ? AND c.homeroom_teacher_id IS NOT NULL
-        `,
-        [targetClassName]
+    // Cek duplikasi NIP pada periode yang sama
+    const [existing]: any = await db.query(
+      "SELECT id FROM teachers WHERE nip = ? AND period_id = ?",
+      [nip, periodId]
+    );
+    if (existing.length > 0) {
+      return NextResponse.json(
+        { success: false, message: "Guru dengan NIP tersebut sudah terdaftar pada periode akademik ini" },
+        { status: 400 }
       );
-      if (hrCheck && hrCheck.length > 0) {
-        return NextResponse.json(
-          { success: false, message: `${targetClassName} sudah memiliki wali kelas yaitu ${hrCheck[0].teacher_name}` },
-          { status: 400 }
-        );
-      }
     }
 
-    // Rule 1: SATU GURU = SATU MATA PELAJARAN per ROMBEL
-    if (Array.isArray(subjects) && Array.isArray(classes)) {
-      for (const className of classes) {
-        const targetClassName = className.startsWith("Kelas") ? className : `Kelas ${className}`;
-        const [cRows]: any = await db.query("SELECT id FROM classes WHERE class_name = ?", [targetClassName]);
-        const classId = cRows[0]?.id;
-
-        if (classId) {
-          for (const subjectName of subjects) {
-            const [sRows]: any = await db.query("SELECT id FROM subjects WHERE name = ?", [subjectName]);
-            const subjectId = sRows[0]?.id;
-
-            if (subjectId) {
-              const [conflict]: any = await db.query(
-                `
-                SELECT t.name 
-                FROM class_subjects cs 
-                JOIN teachers t ON cs.teacher_id = t.id 
-                WHERE cs.class_id = ? AND cs.subject_id = ?
-                `,
-                [classId, subjectId]
-              );
-              if (conflict && conflict.length > 0) {
-                return NextResponse.json(
-                  { 
-                    success: false, 
-                    message: `Mata pelajaran ${subjectName} di ${targetClassName} sudah diajar oleh guru lain (${conflict[0].name})` 
-                  },
-                  { status: 400 }
-                );
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // 1. Insert new teacher into database
     const [result]: any = await db.query(
       `
-      INSERT INTO teachers (name, email, nip, specialization, status)
-      VALUES (?, ?, ?, COALESCE(?, 'Akademik'), 'Aktif')
+      INSERT INTO teachers (name, email, nip, specialization, status, period_id)
+      VALUES (?, ?, ?, ?, ?, ?)
       `,
-      [name, email, nip, specialization]
+      [name, email, nip, specialization || "Akademik", status || "Aktif", periodId]
     );
-
-    const teacherId = result.insertId;
-
-    // 2. Manage Homeroom assignment
-    if (isHomeroom && homeroomClass) {
-      const targetClassName = homeroomClass.startsWith("Kelas") ? homeroomClass : `Kelas ${homeroomClass}`;
-      await db.query(
-        "UPDATE classes SET homeroom_teacher_id = ? WHERE class_name = ?",
-        [teacherId, targetClassName]
-      );
-    }
-
-    // 3. Manage Class Subjects taught mapping
-    if (Array.isArray(subjects) && Array.isArray(classes)) {
-      for (const className of classes) {
-        const targetClassName = className.startsWith("Kelas") ? className : `Kelas ${className}`;
-        const [cRows]: any = await db.query("SELECT id FROM classes WHERE class_name = ?", [targetClassName]);
-        const classId = cRows[0]?.id;
-
-        if (classId) {
-          for (const subjectName of subjects) {
-            const [sRows]: any = await db.query("SELECT id FROM subjects WHERE name = ?", [subjectName]);
-            const subjectId = sRows[0]?.id;
-
-            if (subjectId) {
-              await db.query(
-                "INSERT IGNORE INTO class_subjects (class_id, subject_id, teacher_id) VALUES (?, ?, ?)",
-                [classId, subjectId, teacherId]
-              );
-            }
-          }
-        }
-      }
-    }
 
     return NextResponse.json({
       success: true,
       message: "Data guru berhasil ditambahkan",
-      id: teacherId,
+      id: result.insertId,
     });
   } catch (error: any) {
-    console.error("Create Teacher API Error:", error);
+    console.error("Teachers API POST Error:", error);
     return NextResponse.json(
       { success: false, message: "Terjadi kesalahan internal pada server" },
       { status: 500 }
     );
   }
 }
-

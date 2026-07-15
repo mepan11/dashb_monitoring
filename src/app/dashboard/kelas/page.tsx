@@ -27,6 +27,7 @@ export default function KelasPage() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedGradeFilter, setSelectedGradeFilter] = useState("Semua Kelas");
+  const [periodId, setPeriodId] = useState<string>("");
 
   const gradeFilters = [
     "Semua Kelas",
@@ -38,10 +39,26 @@ export default function KelasPage() {
     "Kelas 6",
   ];
 
-  async function fetchClasses() {
+  // Mendengarkan perubahan periode akademik
+  useEffect(() => {
+    const cached = localStorage.getItem("active_period_id") || "";
+    setPeriodId(cached);
+
+    const handlePeriodChange = (e: any) => {
+      setPeriodId(e.detail.periodId || "");
+    };
+
+    window.addEventListener("academic_period_changed", handlePeriodChange);
+    return () => {
+      window.removeEventListener("academic_period_changed", handlePeriodChange);
+    };
+  }, []);
+
+  async function fetchClasses(pid: string) {
+    if (!pid) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/classes");
+      const res = await fetch(`/api/classes?period_id=${pid}`);
       const json = await res.json();
       if (json.success) {
         setClasses(json.data);
@@ -54,8 +71,10 @@ export default function KelasPage() {
   }
 
   useEffect(() => {
-    fetchClasses();
-  }, []);
+    if (periodId) {
+      fetchClasses(periodId);
+    }
+  }, [periodId]);
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Hapus kelas "${name}"? Tindakan ini juga akan menghapus data terkait.`)) return;
@@ -63,7 +82,7 @@ export default function KelasPage() {
       const res = await fetch(`/api/classes/${id}`, { method: "DELETE" });
       const json = await res.json();
       if (json.success) {
-        fetchClasses();
+        fetchClasses(periodId);
       } else {
         alert(json.message || "Gagal menghapus kelas");
       }

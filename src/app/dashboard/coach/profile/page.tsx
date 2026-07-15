@@ -40,15 +40,32 @@ function CoachProfileContent() {
 
   const [coach, setCoach] = useState<Coach | null>(null);
   const [loading, setLoading] = useState(true);
+  const [periodId, setPeriodId] = useState<string>("");
 
   const days = coach?.schedule ? coach.schedule.split(",").map(d => d.trim()).filter(Boolean) : [];
   const locations = coach?.location ? coach.location.split(",").map(l => l.trim()).filter(Boolean) : [];
 
+  // Mendengarkan perubahan periode akademik
   useEffect(() => {
+    const cached = localStorage.getItem("active_period_id") || "";
+    setPeriodId(cached);
+
+    const handlePeriodChange = (e: any) => {
+      setPeriodId(e.detail.periodId || "");
+    };
+
+    window.addEventListener("academic_period_changed", handlePeriodChange);
+    return () => {
+      window.removeEventListener("academic_period_changed", handlePeriodChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!periodId) return;
     async function fetchCoach() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/coaches/${id}`);
+        const res = await fetch(`/api/coaches/${id}?period_id=${periodId}`);
         const json = await res.json();
         if (json.success) {
           setCoach(json.data);
@@ -60,7 +77,7 @@ function CoachProfileContent() {
       }
     }
     fetchCoach();
-  }, [id]);
+  }, [id, periodId]);
 
   const handleDelete = async () => {
     if (!coach) return;

@@ -8,19 +8,28 @@ export async function GET(request: Request) {
     const classFilter = url.searchParams.get("class") || "";
     const genderFilter = url.searchParams.get("gender") || "";
     const statusFilter = url.searchParams.get("status") || "";
+    const periodId = url.searchParams.get("period_id");
+    
     const page = parseInt(url.searchParams.get("page") || "1", 10);
     const limit = parseInt(url.searchParams.get("limit") || "15", 10);
     const offset = (page - 1) * limit;
 
-    // Build stats
-    const [statsRows]: any = await db.query(
-      `SELECT 
+    // Build stats filtered by period_id
+    let statsQuery = `
+      SELECT 
         COUNT(*) AS total,
         SUM(CASE WHEN status = 'Aktif' THEN 1 ELSE 0 END) AS active,
         SUM(CASE WHEN gender_code = 'L' THEN 1 ELSE 0 END) AS male,
         SUM(CASE WHEN gender_code = 'P' THEN 1 ELSE 0 END) AS female
-       FROM students`
-    );
+      FROM students
+    `;
+    const statsParams = [];
+    if (periodId && periodId !== "undefined") {
+      statsQuery += " WHERE period_id = ?";
+      statsParams.push(periodId);
+    }
+
+    const [statsRows]: any = await db.query(statsQuery, statsParams);
     const stats = {
       total: statsRows[0]?.total || 0,
       active: statsRows[0]?.active || 0,
@@ -28,17 +37,21 @@ export async function GET(request: Request) {
       female: statsRows[0]?.female || 0,
     };
 
-    // Build query
-    let query = "SELECT id, name, gender_text, gender_code, nisn, class_label, status FROM students";
+    // Build main query
+    let query = "SELECT id, name, gender_text, gender_code, nisn, class_label, status, period_id FROM students";
     const queryParams: any[] = [];
     const conditions: string[] = [];
+
+    if (periodId && periodId !== "undefined") {
+      conditions.push("period_id = ?");
+      queryParams.push(periodId);
+    }
 
     if (search) {
       conditions.push("(name LIKE ? OR nisn LIKE ?)");
       queryParams.push(`%${search}%`, `%${search}%`);
     }
 
-    // Filter by class level e.g. "Kelas 1" matches "Kelas 1-A", "Kelas 1-B"
     if (classFilter && classFilter !== "Semua") {
       conditions.push("class_label LIKE ?");
       queryParams.push(`${classFilter}%`);
@@ -86,6 +99,7 @@ export async function GET(request: Request) {
         classLabel: r.class_label,
         status: r.status,
         initials,
+        periodId: r.period_id,
       };
     });
 
@@ -106,21 +120,30 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { name, genderCode, nisn, classLabel, status } = await request.json();
+    const { name, genderCode, nisn, classLabel, status, periodId } = await request.json();
 
-    if (!name || !nisn || !classLabel) {
+    if (!name || !nisn) {
       return NextResponse.json(
-        { success: false, message: "Nama, NISN, dan Kelas wajib diisi" },
+        { success: false, message: "Nama dan NISN wajib diisi" },
         { status: 400 }
       );
+    }
+
+    // Ambil period_id aktif jika tidak disediakan
+    let targetPeriodId = periodId;
+    if (!targetPeriodId) {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      targetPeriodId = activePeriod[0]?.id || 1;
     }
 
     const genderText = genderCode === "P" ? "Perempuan" : "Laki-laki";
 
     const [result]: any = await db.query(
-      `INSERT INTO students (name, gender_text, gender_code, nisn, class_label, status)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [name, genderText, genderCode || "L", nisn, classLabel, status || "Aktif"]
+      `INSERT INTO students (name, gender_text, gender_code, nisn, class_label, status, period_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [name, genderText, genderCode || "L", nisn, classLabel || null, status || "Aktif", targetPeriodId]
     );
 
     return NextResponse.json({
