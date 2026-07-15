@@ -30,65 +30,83 @@ export async function GET(
 
     const teacher = teacherRows[0];
 
-    // 2. Fetch homeroom class status filtered by period
-    const [classRows]: any = await db.query(
-      "SELECT id, class_name FROM classes WHERE homeroom_teacher_id = ? AND period_id = ?",
+    // Find teacher_period_id
+    const [tpRows]: any = await db.query(
+      "SELECT id FROM teacher_periods WHERE teacher_id = ? AND period_id = ?",
       [id, activePeriodId]
     );
-    const homeroomClass = classRows[0] || null;
+    const teacherPeriodId = tpRows[0]?.id;
 
-    // 3. Fetch subjects and classes taught by teacher filtered by period
-    const [classSubjectsRows]: any = await db.query(
-      `
-      SELECT DISTINCT s.name AS subject_name 
-      FROM class_subjects cs 
-      JOIN subjects s ON cs.subject_id = s.id 
-      JOIN classes c ON cs.class_id = c.id
-      WHERE cs.teacher_id = ? AND c.period_id = ? AND s.period_id = ?
-      `,
-      [id, activePeriodId, activePeriodId]
-    );
+    let homeroomClass = null;
+    const subjects: string[] = [];
+    const classes: string[] = [];
+    let attendanceRate = "0.0";
+    let averageScore = "0.0";
 
-    const [taughtClassesRows]: any = await db.query(
-      `
-      SELECT DISTINCT c.class_name 
-      FROM class_subjects cs 
-      JOIN classes c ON cs.class_id = c.id 
-      WHERE cs.teacher_id = ? AND c.period_id = ?
-      `,
-      [id, activePeriodId]
-    );
+    if (teacherPeriodId) {
+      // 2. Fetch homeroom class status filtered by period
+      const [classRows]: any = await db.query(
+        `SELECT c.id, c.class_name 
+         FROM class_periods clp 
+         JOIN classes c ON clp.class_id = c.id 
+         WHERE clp.homeroom_teacher_id = ?`,
+        [teacherPeriodId]
+      );
+      homeroomClass = classRows[0] || null;
 
-    const subjects = classSubjectsRows.map((r: any) => r.subject_name);
-    const classes = taughtClassesRows.map((r: any) => r.class_name);
+      // 3. Fetch subjects and classes taught by teacher filtered by period
+      const [classSubjectsRows]: any = await db.query(
+        `
+        SELECT DISTINCT s.name AS subject_name 
+        FROM class_subjects cs 
+        JOIN subject_periods sp ON cs.subject_period_id = sp.id 
+        JOIN subjects s ON sp.subject_id = s.id
+        WHERE cs.teacher_period_id = ?
+        `,
+        [teacherPeriodId]
+      );
 
-    // 4. Fetch and calculate teacher attendance percentage filtered by period
-    const [attRows]: any = await db.query(
-      `
-      SELECT 
-        COUNT(*) AS total,
-        SUM(CASE WHEN status IN ('Hadir', 'Terlambat') THEN 1 ELSE 0 END) AS present
-      FROM teacher_attendance 
-      WHERE teacher_id = ? AND period_id = ?
-      `,
-      [id, activePeriodId]
-    );
-    const attTotal = attRows[0]?.total || 0;
-    const attPresent = attRows[0]?.present || 0;
-    const attendanceRate = attTotal > 0 ? ((attPresent / attTotal) * 100).toFixed(1) : "0.0";
+      const [taughtClassesRows]: any = await db.query(
+        `
+        SELECT DISTINCT c.class_name 
+        FROM class_subjects cs 
+        JOIN class_periods clp ON cs.class_period_id = clp.id
+        JOIN classes c ON clp.class_id = c.id 
+        WHERE cs.teacher_period_id = ?
+        `,
+        [teacherPeriodId]
+      );
 
-    // 5. Fetch and calculate average grade of students taught by this teacher filtered by period
-    const [gradeRows]: any = await db.query(
-      `
-      SELECT AVG(g.average) AS avg_score 
-      FROM grades g 
-      JOIN class_subjects cs ON g.class_id = cs.class_id 
-      JOIN classes c ON g.class_id = c.id
-      WHERE cs.teacher_id = ? AND c.period_id = ?
-      `,
-      [id, activePeriodId]
-    );
-    const averageScore = gradeRows[0]?.avg_score ? parseFloat(gradeRows[0].avg_score).toFixed(1) : "0.0";
+      classSubjectsRows.forEach((r: any) => subjects.push(r.subject_name));
+      taughtClassesRows.forEach((r: any) => classes.push(r.class_name));
+
+      // 4. Fetch and calculate teacher attendance percentage filtered by period
+      const [attRows]: any = await db.query(
+        `
+        SELECT 
+          COUNT(*) AS total,
+          SUM(CASE WHEN status IN ('Hadir', 'Terlambat') THEN 1 ELSE 0 END) AS present
+        FROM teacher_attendance 
+        WHERE teacher_period_id = ?
+        `,
+        [teacherPeriodId]
+      );
+      const attTotal = attRows[0]?.total || 0;
+      const attPresent = attRows[0]?.present || 0;
+      attendanceRate = attTotal > 0 ? ((attPresent / attTotal) * 100).toFixed(1) : "0.0";
+
+      // 5. Fetch and calculate average grade of students taught by this teacher filtered by period
+      const [gradeRows]: any = await db.query(
+        `
+        SELECT AVG(g.average) AS avg_score 
+        FROM grades g 
+        JOIN class_subjects cs ON g.class_period_id = cs.class_period_id
+        WHERE cs.teacher_period_id = ?
+        `,
+        [teacherPeriodId]
+      );
+      averageScore = gradeRows[0]?.avg_score ? parseFloat(gradeRows[0].avg_score).toFixed(1) : "0.0";
+    }
 
     // Format initials for avatar
     const nameParts = teacher.name.split(" ");
@@ -165,18 +183,37 @@ export async function PUT(
       activePeriodId = activePeriod[0]?.id || 1;
     }
 
+    // Ensure teacher has a record in teacher_periods for this period
+    let teacherPeriodId: number;
+    const [tpRows]: any = await db.query(
+      "SELECT id FROM teacher_periods WHERE teacher_id = ? AND period_id = ?",
+      [id, activePeriodId]
+    );
+
+    if (tpRows.length > 0) {
+      teacherPeriodId = tpRows[0].id;
+    } else {
+      const [tpResult]: any = await db.query(
+        "INSERT INTO teacher_periods (teacher_id, period_id, is_active) VALUES (?, ?, 1)",
+        [id, activePeriodId]
+      );
+      teacherPeriodId = tpResult.insertId;
+    }
+
     // --- BUSINESS RULE VALIDATIONS ---
     // Rule 2: WALI KELAS = HANYA 1 per ROMBEL
     if (isHomeroom && homeroomClass) {
       const targetClassName = homeroomClass.startsWith("Kelas") ? homeroomClass : `Kelas ${homeroomClass}`;
       const [hrCheck]: any = await db.query(
         `
-        SELECT c.homeroom_teacher_id, t.name AS teacher_name 
-        FROM classes c 
-        JOIN teachers t ON c.homeroom_teacher_id = t.id 
-        WHERE c.class_name = ? AND c.period_id = ? AND c.homeroom_teacher_id IS NOT NULL AND c.homeroom_teacher_id != ?
+        SELECT clp.homeroom_teacher_id, t.name AS teacher_name 
+        FROM class_periods clp 
+        JOIN classes c ON clp.class_id = c.id
+        JOIN teacher_periods tp ON clp.homeroom_teacher_id = tp.id
+        JOIN teachers t ON tp.teacher_id = t.id 
+        WHERE c.class_name = ? AND clp.period_id = ? AND clp.homeroom_teacher_id IS NOT NULL AND clp.homeroom_teacher_id != ?
         `,
-        [targetClassName, activePeriodId, id]
+        [targetClassName, activePeriodId, teacherPeriodId]
       );
       if (hrCheck && hrCheck.length > 0) {
         return NextResponse.json(
@@ -190,8 +227,11 @@ export async function PUT(
     if (isHomeroom) {
       const targetClassName = homeroomClass.startsWith("Kelas") ? homeroomClass : `Kelas ${homeroomClass}`;
       const [teacherHrCheck]: any = await db.query(
-        "SELECT class_name FROM classes WHERE homeroom_teacher_id = ? AND period_id = ? AND class_name != ?",
-        [id, activePeriodId, targetClassName]
+        `SELECT c.class_name 
+         FROM class_periods clp 
+         JOIN classes c ON clp.class_id = c.id 
+         WHERE clp.homeroom_teacher_id = ? AND clp.period_id = ? AND c.class_name != ?`,
+        [teacherPeriodId, activePeriodId, targetClassName]
       );
       if (teacherHrCheck && teacherHrCheck.length > 0) {
         return NextResponse.json(
@@ -205,23 +245,34 @@ export async function PUT(
     if (Array.isArray(subjects) && Array.isArray(classes)) {
       for (const className of classes) {
         const targetClassName = className.startsWith("Kelas") ? className : `Kelas ${className}`;
-        const [cRows]: any = await db.query("SELECT id FROM classes WHERE class_name = ? AND period_id = ?", [targetClassName, activePeriodId]);
-        const classId = cRows[0]?.id;
+        const [cRows]: any = await db.query(
+          `SELECT clp.id FROM class_periods clp 
+           JOIN classes c ON clp.class_id = c.id 
+           WHERE c.class_name = ? AND clp.period_id = ?`,
+          [targetClassName, activePeriodId]
+        );
+        const classPeriodId = cRows[0]?.id;
 
-        if (classId) {
+        if (classPeriodId) {
           for (const subjectName of subjects) {
-            const [sRows]: any = await db.query("SELECT id FROM subjects WHERE name = ? AND period_id = ?", [subjectName, activePeriodId]);
-            const subjectId = sRows[0]?.id;
+            const [sRows]: any = await db.query(
+              `SELECT sp.id FROM subject_periods sp 
+               JOIN subjects s ON sp.subject_id = s.id 
+               WHERE s.name = ? AND sp.period_id = ?`,
+              [subjectName, activePeriodId]
+            );
+            const subjectPeriodId = sRows[0]?.id;
 
-            if (subjectId) {
+            if (subjectPeriodId) {
               const [conflict]: any = await db.query(
                 `
                 SELECT t.name 
                 FROM class_subjects cs 
-                JOIN teachers t ON cs.teacher_id = t.id 
-                WHERE cs.class_id = ? AND cs.subject_id = ? AND cs.teacher_id != ?
+                JOIN teacher_periods tp ON cs.teacher_period_id = tp.id
+                JOIN teachers t ON tp.teacher_id = t.id 
+                WHERE cs.class_period_id = ? AND cs.subject_period_id = ? AND cs.teacher_period_id != ?
                 `,
-                [classId, subjectId, id]
+                [classPeriodId, subjectPeriodId, teacherPeriodId]
               );
               if (conflict && conflict.length > 0) {
                 return NextResponse.json(
@@ -257,41 +308,58 @@ export async function PUT(
 
     // 2. Manage Homeroom assignment
     // Reset this teacher's homeroom responsibility from all classes in this period
-    await db.query("UPDATE classes SET homeroom_teacher_id = NULL WHERE homeroom_teacher_id = ? AND period_id = ?", [id, activePeriodId]);
+    await db.query("UPDATE class_periods SET homeroom_teacher_id = NULL WHERE homeroom_teacher_id = ? AND period_id = ?", [teacherPeriodId, activePeriodId]);
 
     if (isHomeroom && homeroomClass) {
       const targetClassName = homeroomClass.startsWith("Kelas") ? homeroomClass : `Kelas ${homeroomClass}`;
-      await db.query(
-        "UPDATE classes SET homeroom_teacher_id = ? WHERE class_name = ? AND period_id = ?",
-        [id, targetClassName, activePeriodId]
+      // Find classPeriodId
+      const [classPeriodRow]: any = await db.query(
+        `SELECT clp.id FROM class_periods clp 
+         JOIN classes c ON clp.class_id = c.id 
+         WHERE c.class_name = ? AND clp.period_id = ?`,
+        [targetClassName, activePeriodId]
       );
+      if (classPeriodRow.length > 0) {
+        await db.query(
+          "UPDATE class_periods SET homeroom_teacher_id = ? WHERE id = ?",
+          [teacherPeriodId, classPeriodRow[0].id]
+        );
+      }
     }
 
     // 3. Manage Class Subjects taught mapping for this period
     if (Array.isArray(subjects) && Array.isArray(classes)) {
-      // Clear existing records for this period
+      // Clear existing records for this teacher in this period
       await db.query(
-        `DELETE cs FROM class_subjects cs
-         JOIN classes c ON cs.class_id = c.id
-         WHERE cs.teacher_id = ? AND c.period_id = ?`,
-        [id, activePeriodId]
+        `DELETE FROM class_subjects WHERE teacher_period_id = ?`,
+        [teacherPeriodId]
       );
 
       // Resolve class and subject IDs to insert
       for (const className of classes) {
         const targetClassName = className.startsWith("Kelas") ? className : `Kelas ${className}`;
-        const [cRows]: any = await db.query("SELECT id FROM classes WHERE class_name = ? AND period_id = ?", [targetClassName, activePeriodId]);
-        const classId = cRows[0]?.id;
+        const [cRows]: any = await db.query(
+          `SELECT clp.id FROM class_periods clp 
+           JOIN classes c ON clp.class_id = c.id 
+           WHERE c.class_name = ? AND clp.period_id = ?`,
+          [targetClassName, activePeriodId]
+        );
+        const classPeriodId = cRows[0]?.id;
 
-        if (classId) {
+        if (classPeriodId) {
           for (const subjectName of subjects) {
-            const [sRows]: any = await db.query("SELECT id FROM subjects WHERE name = ? AND period_id = ?", [subjectName, activePeriodId]);
-            const subjectId = sRows[0]?.id;
+            const [sRows]: any = await db.query(
+              `SELECT sp.id FROM subject_periods sp 
+               JOIN subjects s ON sp.subject_id = s.id 
+               WHERE s.name = ? AND sp.period_id = ?`,
+              [subjectName, activePeriodId]
+            );
+            const subjectPeriodId = sRows[0]?.id;
 
-            if (subjectId) {
+            if (subjectPeriodId) {
               await db.query(
-                "INSERT IGNORE INTO class_subjects (class_id, subject_id, teacher_id) VALUES (?, ?, ?)",
-                [classId, subjectId, id]
+                "INSERT IGNORE INTO class_subjects (class_period_id, subject_period_id, teacher_period_id) VALUES (?, ?, ?)",
+                [classPeriodId, subjectPeriodId, teacherPeriodId]
               );
             }
           }

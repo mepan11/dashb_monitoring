@@ -14,22 +14,26 @@ export async function GET(request: Request) {
     const limit = parseInt(url.searchParams.get("limit") || "15", 10);
     const offset = (page - 1) * limit;
 
-    // Build stats filtered by period_id
-    let statsQuery = `
-      SELECT 
-        COUNT(*) AS total,
-        SUM(CASE WHEN status = 'Aktif' THEN 1 ELSE 0 END) AS active,
-        SUM(CASE WHEN gender_code = 'L' THEN 1 ELSE 0 END) AS male,
-        SUM(CASE WHEN gender_code = 'P' THEN 1 ELSE 0 END) AS female
-      FROM students
-    `;
-    const statsParams = [];
-    if (periodId && periodId !== "undefined") {
-      statsQuery += " WHERE period_id = ?";
-      statsParams.push(periodId);
+    let activePeriodId = periodId;
+    if (!activePeriodId || activePeriodId === "undefined") {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
     }
 
-    const [statsRows]: any = await db.query(statsQuery, statsParams);
+    // Build stats filtered by student_periods joining students
+    const [statsRows]: any = await db.query(
+      `SELECT 
+        COUNT(DISTINCT s.id) AS total,
+        SUM(CASE WHEN s.status = 'Aktif' THEN 1 ELSE 0 END) AS active,
+        SUM(CASE WHEN s.gender_code = 'L' THEN 1 ELSE 0 END) AS male,
+        SUM(CASE WHEN s.gender_code = 'P' THEN 1 ELSE 0 END) AS female
+       FROM students s
+       JOIN student_periods sp ON s.id = sp.student_id AND sp.period_id = ?`,
+      [activePeriodId]
+    );
+
     const stats = {
       total: statsRows[0]?.total || 0,
       active: statsRows[0]?.active || 0,
@@ -38,32 +42,41 @@ export async function GET(request: Request) {
     };
 
     // Build main query
-    let query = "SELECT id, name, gender_text, gender_code, nisn, class_label, status, period_id FROM students";
-    const queryParams: any[] = [];
+    let query = `
+      SELECT 
+        s.id, 
+        s.name, 
+        s.gender_text, 
+        s.gender_code, 
+        s.nisn, 
+        s.status, 
+        cl.class_name AS class_label,
+        sp.period_id 
+      FROM students s
+      JOIN student_periods sp ON s.id = sp.student_id AND sp.period_id = ?
+      LEFT JOIN class_periods clp ON sp.class_period_id = clp.id
+      LEFT JOIN classes cl ON clp.class_id = cl.id
+    `;
+    const queryParams: any[] = [activePeriodId];
     const conditions: string[] = [];
 
-    if (periodId && periodId !== "undefined") {
-      conditions.push("period_id = ?");
-      queryParams.push(periodId);
-    }
-
     if (search) {
-      conditions.push("(name LIKE ? OR nisn LIKE ?)");
+      conditions.push("(s.name LIKE ? OR s.nisn LIKE ?)");
       queryParams.push(`%${search}%`, `%${search}%`);
     }
 
     if (classFilter && classFilter !== "Semua") {
-      conditions.push("class_label LIKE ?");
+      conditions.push("cl.class_name LIKE ?");
       queryParams.push(`${classFilter}%`);
     }
 
     if (genderFilter && genderFilter !== "Semua") {
-      conditions.push("gender_code = ?");
+      conditions.push("s.gender_code = ?");
       queryParams.push(genderFilter);
     }
 
     if (statusFilter && statusFilter !== "Semua") {
-      conditions.push("status = ?");
+      conditions.push("s.status = ?");
       queryParams.push(statusFilter);
     }
 
@@ -72,14 +85,22 @@ export async function GET(request: Request) {
     }
 
     // Count for pagination
-    let countQuery = "SELECT COUNT(*) AS count FROM students";
+    let countQuery = `
+      SELECT COUNT(DISTINCT s.id) AS count 
+      FROM students s
+      JOIN student_periods sp ON s.id = sp.student_id AND sp.period_id = ?
+      LEFT JOIN class_periods clp ON sp.class_period_id = clp.id
+      LEFT JOIN classes cl ON clp.class_id = cl.id
+    `;
+    const countQueryParams = [activePeriodId];
     if (conditions.length > 0) {
       countQuery += " WHERE " + conditions.join(" AND ");
+      countQueryParams.push(...queryParams.slice(1));
     }
-    const [countRes]: any = await db.query(countQuery, queryParams);
+    const [countRes]: any = await db.query(countQuery, countQueryParams);
     const filteredTotal = countRes[0]?.count || 0;
 
-    query += " ORDER BY class_label ASC, name ASC LIMIT ? OFFSET ?";
+    query += " ORDER BY cl.class_name ASC, s.name ASC LIMIT ? OFFSET ?";
     queryParams.push(limit, offset);
 
     const [rows]: any = await db.query(query, queryParams);
@@ -96,7 +117,7 @@ export async function GET(request: Request) {
         genderText: r.gender_text,
         genderCode: r.gender_code,
         nisn: r.nisn,
-        classLabel: r.class_label,
+        classLabel: r.class_label || "",
         status: r.status,
         initials,
         periodId: r.period_id,
@@ -140,16 +161,56 @@ export async function POST(request: Request) {
 
     const genderText = genderCode === "P" ? "Perempuan" : "Laki-laki";
 
-    const [result]: any = await db.query(
-      `INSERT INTO students (name, gender_text, gender_code, nisn, class_label, status, period_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [name, genderText, genderCode || "L", nisn, classLabel || null, status || "Aktif", targetPeriodId]
+    // 1. Dapatkan atau buat data siswa master
+    let studentId: number;
+    const [existingMaster]: any = await db.query(
+      "SELECT id FROM students WHERE nisn = ?",
+      [nisn]
+    );
+
+    if (existingMaster.length > 0) {
+      studentId = existingMaster[0].id;
+      // Update data siswa master
+      await db.query(
+        "UPDATE students SET name = ?, gender_text = ?, gender_code = ?, status = ? WHERE id = ?",
+        [name, genderText, genderCode || "L", status || "Aktif", studentId]
+      );
+    } else {
+      const [insertRes]: any = await db.query(
+        `INSERT INTO students (name, gender_text, gender_code, nisn, status)
+         VALUES (?, ?, ?, ?, ?)`,
+        [name, genderText, genderCode || "L", nisn, status || "Aktif"]
+      );
+      studentId = insertRes.insertId;
+    }
+
+    // 2. Tentukan class_period_id dari classLabel
+    let classPeriodId = null;
+    if (classLabel) {
+      const targetClassName = classLabel.startsWith("Kelas") ? classLabel : `Kelas ${classLabel}`;
+      const [classPeriodRow]: any = await db.query(
+        `SELECT clp.id FROM class_periods clp 
+         JOIN classes c ON clp.class_id = c.id 
+         WHERE c.class_name = ? AND clp.period_id = ?`,
+        [targetClassName, targetPeriodId]
+      );
+      if (classPeriodRow.length > 0) {
+        classPeriodId = classPeriodRow[0].id;
+      }
+    }
+
+    // 3. Hubungkan ke periode akademik di student_periods
+    await db.query(
+      `INSERT INTO student_periods (student_id, period_id, class_period_id, is_active)
+       VALUES (?, ?, ?, 1)
+       ON DUPLICATE KEY UPDATE class_period_id = ?`,
+      [studentId, targetPeriodId, classPeriodId, classPeriodId]
     );
 
     return NextResponse.json({
       success: true,
       message: "Data siswa berhasil ditambahkan",
-      id: result.insertId,
+      id: studentId,
     });
   } catch (error: any) {
     console.error("Students API POST Error:", error);

@@ -7,22 +7,36 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const url = new URL(request.url);
+    const periodIdParam = url.searchParams.get("period_id");
+
+    let activePeriodId = periodIdParam;
+    if (!activePeriodId || activePeriodId === "undefined") {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
+    }
+
     const [rows]: any = await db.query(
       `SELECT c.id, c.class_name AS className, 
-              c.homeroom_teacher_id AS homeroomTeacherId,
               c.capacity,
-              c.academic_year AS academicYear,
-              c.semester,
-              c.period_id AS periodId
+              tp.teacher_id AS homeroomTeacherId,
+              ap.academic_year AS academicYear,
+              ap.semester,
+              clp.period_id AS periodId
        FROM classes c
-       WHERE c.id = ?`,
-      [id]
+       JOIN class_periods clp ON c.id = clp.class_id
+       JOIN academic_periods ap ON clp.period_id = ap.id
+       LEFT JOIN teacher_periods tp ON clp.homeroom_teacher_id = tp.id
+       WHERE c.id = ? AND clp.period_id = ?`,
+      [id, activePeriodId]
     );
 
     const cls = rows[0];
     if (!cls) {
       return NextResponse.json(
-        { success: false, message: "Kelas tidak ditemukan" },
+        { success: false, message: "Kelas tidak ditemukan untuk periode akademik ini" },
         { status: 404 }
       );
     }
@@ -43,7 +57,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const { className, homeroomTeacherId, capacity, academicYear, semester, periodId } = await request.json();
+    const { className, homeroomTeacherId, capacity, periodId } = await request.json();
 
     if (!className) {
       return NextResponse.json(
@@ -52,32 +66,20 @@ export async function PUT(
       );
     }
 
-    // Ambil period_id saat ini jika tidak disediakan
+    // Resolusi period_id saat ini jika tidak disediakan
     let targetPeriodId = periodId;
     if (!targetPeriodId) {
-      const [current]: any = await db.query("SELECT period_id FROM classes WHERE id = ?", [id]);
-      targetPeriodId = current[0]?.period_id || null;
-    }
-
-    let resolvedYear = academicYear;
-    let resolvedSemester = semester;
-
-    if (targetPeriodId) {
-      const [periodDetails]: any = await db.query(
-        "SELECT academic_year, semester FROM academic_periods WHERE id = ?",
-        [targetPeriodId]
+      const [current]: any = await db.query(
+        "SELECT period_id FROM class_periods WHERE class_id = ? LIMIT 1",
+        [id]
       );
-      if (periodDetails && periodDetails.length > 0) {
-        resolvedYear = periodDetails[0].academic_year;
-        resolvedSemester = periodDetails[0].semester;
-      }
+      targetPeriodId = current[0]?.period_id || 1;
     }
 
+    // 1. Update class master
     const [result]: any = await db.query(
-      `UPDATE classes 
-       SET class_name = ?, homeroom_teacher_id = ?, capacity = ?, academic_year = ?, semester = ?, period_id = ?
-       WHERE id = ?`,
-      [className, homeroomTeacherId || null, capacity || 32, resolvedYear || "2025/2026", resolvedSemester || "Ganjil", targetPeriodId, id]
+      `UPDATE classes SET class_name = ?, capacity = ? WHERE id = ?`,
+      [className, capacity || 32, id]
     );
 
     if (result.affectedRows === 0) {
@@ -86,6 +88,26 @@ export async function PUT(
         { status: 404 }
       );
     }
+
+    // 2. Resolve homeroom teacher_period_id
+    let homeroomTeacherPeriodId = null;
+    if (homeroomTeacherId) {
+      const [tpRows]: any = await db.query(
+        "SELECT id FROM teacher_periods WHERE teacher_id = ? AND period_id = ?",
+        [homeroomTeacherId, targetPeriodId]
+      );
+      if (tpRows.length > 0) {
+        homeroomTeacherPeriodId = tpRows[0].id;
+      }
+    }
+
+    // 3. Link or update in class_periods
+    await db.query(
+      `INSERT INTO class_periods (class_id, period_id, homeroom_teacher_id)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE homeroom_teacher_id = ?`,
+      [id, targetPeriodId, homeroomTeacherPeriodId, homeroomTeacherPeriodId]
+    );
 
     return NextResponse.json({
       success: true,

@@ -37,7 +37,7 @@ export default function CoachPage() {
   const [selectedBidang, setSelectedBidang] = useState("Semua Bidang");
   const [selectedStatus, setSelectedStatus] = useState("Status: Semua");
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [statsData, setStatsData] = useState({ total: 0, active: 0, specializationCount: 0, nonActive: 0 });
   const [filteredTotal, setFilteredTotal] = useState(0);
@@ -232,7 +232,7 @@ export default function CoachPage() {
           <Button
             onClick={handleCopyPrevious}
             disabled={copying}
-            className="!w-auto !py-2.5 !px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 text-xs font-semibold rounded-lg flex items-center gap-2 shadow-sm disabled:opacity-50"
+            className="!w-auto !py-2.5 !px-5 bg-white border border-slate-200 !text-black hover:bg-slate-50 hover:text-slate-900 text-xs font-semibold rounded-lg flex items-center gap-2 shadow-sm disabled:opacity-50"
           >
             <Copy className="w-4 h-4" />
             {copying ? "Menyalin..." : "Salin Data Coach Periode Sebelumnya"}
@@ -263,7 +263,7 @@ export default function CoachPage() {
 
       {/* Filter & Table Container */}
       <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.02)] overflow-hidden">
-        
+
         {/* Filter Controls Bar */}
         <div className="p-5 border-b border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
@@ -359,7 +359,7 @@ export default function CoachPage() {
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                 {coaches.map((coach) => (
                   <tr key={coach.id} className="hover:bg-slate-50/50 transition-all">
-                    
+
                     {/* Name and Email */}
                     <td className="py-4 px-6 flex items-center gap-3">
                       {/* Initials Avatar */}
@@ -419,7 +419,7 @@ export default function CoachPage() {
                         <Link href={`/dashboard/coach/edit?id=${coach.id}`} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all">
                           <Pencil className="w-4 h-4" />
                         </Link>
-                        <button 
+                        <button
                           onClick={() => handleDelete(coach.id)}
                           className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
                         >
@@ -441,17 +441,17 @@ export default function CoachPage() {
             <span className="text-xs font-semibold text-slate-400">
               Menampilkan {startEntry} - {endEntry} dari {filteredTotal} Coach
             </span>
-            
+
             <div className="flex items-center gap-1">
               {/* Prev */}
-              <button 
+              <button
                 onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                 disabled={currentPage === 1}
                 className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 text-slate-400 disabled:opacity-50"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              
+
               {/* Page Buttons */}
               {Array.from({ length: totalPages }).map((_, i) => {
                 const pageNum = i + 1;
@@ -459,11 +459,10 @@ export default function CoachPage() {
                   <button
                     key={pageNum}
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center transition-all ${
-                      currentPage === pageNum
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "hover:bg-slate-50 text-slate-600 font-semibold"
-                    }`}
+                    className={`w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center transition-all ${currentPage === pageNum
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "hover:bg-slate-50 text-slate-600 font-semibold"
+                      }`}
                   >
                     {pageNum}
                   </button>
@@ -471,7 +470,7 @@ export default function CoachPage() {
               })}
 
               {/* Next */}
-              <button 
+              <button
                 onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
                 disabled={currentPage === totalPages}
                 className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 text-slate-400 disabled:opacity-50"

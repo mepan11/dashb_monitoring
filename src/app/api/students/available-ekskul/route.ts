@@ -15,20 +15,47 @@ export async function GET(request: Request) {
       activePeriodId = activePeriod[0]?.id || 1;
     }
 
-    // Fetch all students who are NOT registered in the specified extracurricular and match the period_id
-    const [rows]: any = await db.query(
-      `SELECT id, name, nisn, class_label AS className 
-       FROM students 
-       WHERE period_id = ? AND id NOT IN (
-         SELECT student_id 
-         FROM extracurricular_students 
-         WHERE extracurricular_id = ?
-       )
-       ORDER BY name ASC`,
-      [activePeriodId, ekskulId]
+    // Resolve extracurricular_period_id
+    const [epRows]: any = await db.query(
+      "SELECT id FROM extracurricular_periods WHERE extracurricular_id = ? AND period_id = ?",
+      [ekskulId, activePeriodId]
     );
+    const epId = epRows[0]?.id;
 
-    return NextResponse.json({ success: true, data: rows });
+    let students = [];
+    if (epId) {
+      // Fetch all students registered in the current period who are NOT registered in the specified extracurricular period
+      const [rows]: any = await db.query(
+        `SELECT s.id, s.name, s.nisn, cl.class_name AS className 
+         FROM student_periods sp
+         JOIN students s ON sp.student_id = s.id
+         LEFT JOIN class_periods clp ON sp.class_period_id = clp.id
+         LEFT JOIN classes cl ON clp.class_id = cl.id
+         WHERE sp.period_id = ? AND sp.id NOT IN (
+           SELECT student_period_id 
+           FROM extracurricular_students 
+           WHERE extracurricular_period_id = ?
+         )
+         ORDER BY s.name ASC`,
+        [activePeriodId, epId]
+      );
+      students = rows;
+    } else {
+      // If epId doesn't exist, all students in active period are available
+      const [rows]: any = await db.query(
+        `SELECT s.id, s.name, s.nisn, cl.class_name AS className 
+         FROM student_periods sp
+         JOIN students s ON sp.student_id = s.id
+         LEFT JOIN class_periods clp ON sp.class_period_id = clp.id
+         LEFT JOIN classes cl ON clp.class_id = cl.id
+         WHERE sp.period_id = ?
+         ORDER BY s.name ASC`,
+        [activePeriodId]
+      );
+      students = rows;
+    }
+
+    return NextResponse.json({ success: true, data: students });
   } catch (error: any) {
     console.error("Available Ekskul Students GET error:", error);
     return NextResponse.json(

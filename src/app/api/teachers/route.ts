@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
 export async function GET(request: Request) {
@@ -17,11 +17,34 @@ export async function GET(request: Request) {
       activePeriodId = activePeriod[0]?.id || 1;
     }
 
-    // 1. Fetch counts/statistics filtered by period
-    const [totalRes]: any = await db.query("SELECT COUNT(*) AS count FROM teachers WHERE period_id = ?", [activePeriodId]);
-    const [activeRes]: any = await db.query("SELECT COUNT(*) AS count FROM teachers WHERE status = 'Aktif' AND period_id = ?", [activePeriodId]);
-    const [akademikRes]: any = await db.query("SELECT COUNT(*) AS count FROM teachers WHERE specialization = 'Akademik' AND period_id = ?", [activePeriodId]);
-    const [nonAkademikRes]: any = await db.query("SELECT COUNT(*) AS count FROM teachers WHERE specialization = 'Non-Akademik' AND period_id = ?", [activePeriodId]);
+    // 1. Fetch counts/statistics filtered by period joining teacher_periods
+    const [totalRes]: any = await db.query(
+      `SELECT COUNT(DISTINCT t.id) AS count 
+       FROM teachers t
+       JOIN teacher_periods tp ON t.id = tp.teacher_id AND tp.period_id = ?`, 
+      [activePeriodId]
+    );
+    const [activeRes]: any = await db.query(
+      `SELECT COUNT(DISTINCT t.id) AS count 
+       FROM teachers t 
+       JOIN teacher_periods tp ON t.id = tp.teacher_id AND tp.period_id = ?
+       WHERE t.status = 'Aktif'`, 
+      [activePeriodId]
+    );
+    const [akademikRes]: any = await db.query(
+      `SELECT COUNT(DISTINCT t.id) AS count 
+       FROM teachers t 
+       JOIN teacher_periods tp ON t.id = tp.teacher_id AND tp.period_id = ?
+       WHERE t.specialization = 'Akademik'`, 
+      [activePeriodId]
+    );
+    const [nonAkademikRes]: any = await db.query(
+      `SELECT COUNT(DISTINCT t.id) AS count 
+       FROM teachers t 
+       JOIN teacher_periods tp ON t.id = tp.teacher_id AND tp.period_id = ?
+       WHERE t.specialization = 'Non-Akademik'`, 
+      [activePeriodId]
+    );
 
     const stats = {
       total: totalRes[0]?.count || 0,
@@ -40,11 +63,14 @@ export async function GET(request: Request) {
         t.specialization, 
         t.status, 
         COALESCE(GROUP_CONCAT(DISTINCT s.name SEPARATOR ', '), '—') AS subjects, 
-        COALESCE(GROUP_CONCAT(DISTINCT c.class_name SEPARATOR ', '), '—') AS classes 
+        COALESCE(GROUP_CONCAT(DISTINCT cl.class_name SEPARATOR ', '), '—') AS classes 
       FROM teachers t 
-      LEFT JOIN class_subjects cs ON t.id = cs.teacher_id 
-      LEFT JOIN subjects s ON cs.subject_id = s.id AND s.period_id = ?
-      LEFT JOIN classes c ON cs.class_id = c.id AND c.period_id = ?
+      JOIN teacher_periods tp ON t.id = tp.teacher_id AND tp.period_id = ?
+      LEFT JOIN class_subjects cs ON tp.id = cs.teacher_period_id 
+      LEFT JOIN subject_periods sp ON cs.subject_period_id = sp.id AND sp.period_id = ?
+      LEFT JOIN subjects s ON sp.subject_id = s.id
+      LEFT JOIN class_periods clp ON cs.class_period_id = clp.id AND clp.period_id = ?
+      LEFT JOIN classes cl ON clp.class_id = cl.id
     `;
 
     const hasLimit = url.searchParams.has("limit");
@@ -52,9 +78,8 @@ export async function GET(request: Request) {
     const limit = parseInt(url.searchParams.get("limit") || "10", 10);
     const offset = (page - 1) * limit;
 
-    const queryParams: any[] = [activePeriodId, activePeriodId];
-    const conditions: string[] = ["t.period_id = ?"];
-    queryParams.push(activePeriodId);
+    const queryParams: any[] = [activePeriodId, activePeriodId, activePeriodId];
+    const conditions: string[] = [];
 
     if (search) {
       conditions.push("(t.name LIKE ? OR t.nip LIKE ? OR t.email LIKE ?)");
@@ -67,21 +92,32 @@ export async function GET(request: Request) {
     }
 
     if (subjectFilter) {
-      conditions.push("t.id IN (SELECT cs_sub.teacher_id FROM class_subjects cs_sub JOIN subjects s_sub ON cs_sub.subject_id = s_sub.id WHERE s_sub.name = ? AND s_sub.period_id = ?)");
+      conditions.push(`tp.id IN (
+        SELECT cs_sub.teacher_period_id 
+        FROM class_subjects cs_sub 
+        JOIN subject_periods sp_sub ON cs_sub.subject_period_id = sp_sub.id 
+        JOIN subjects s_sub ON sp_sub.subject_id = s_sub.id 
+        WHERE s_sub.name = ? AND sp_sub.period_id = ?
+      )`);
       queryParams.push(subjectFilter, activePeriodId);
     }
 
     // Get total count of filtered records
-    let countQuery = "SELECT COUNT(DISTINCT t.id) AS count FROM teachers t";
-    if (conditions.length > 0) {
-      countQuery += " WHERE " + conditions.join(" AND ");
-    }
-    const [countRows]: any = await db.query(countQuery, queryParams.slice(2)); // Skip the first two periodId params
-    const filteredTotal = countRows[0]?.count || 0;
+    let countQuery = `
+      SELECT COUNT(DISTINCT t.id) AS count 
+      FROM teachers t
+      JOIN teacher_periods tp ON t.id = tp.teacher_id AND tp.period_id = ?
+    `;
+    const countQueryParams = [activePeriodId];
 
     if (conditions.length > 0) {
+      countQuery += " WHERE " + conditions.join(" AND ");
       query += " WHERE " + conditions.join(" AND ");
+      countQueryParams.push(...queryParams.slice(3));
     }
+
+    const [countRows]: any = await db.query(countQuery, countQueryParams);
+    const filteredTotal = countRows[0]?.count || 0;
 
     let finalParams = [...queryParams];
     if (hasLimit) {
@@ -157,41 +193,34 @@ export async function POST(request: Request) {
 
       const prevPeriodId = prevPeriods[0].id;
 
-      // Ambil data guru dari periode sebelumnya
-      const [prevTeachers]: any = await db.query(
-        "SELECT name, email, nip, specialization, status FROM teachers WHERE period_id = ?",
+      // Ambil data relasi guru dari periode sebelumnya
+      const [prevTeacherPeriods]: any = await db.query(
+        "SELECT teacher_id FROM teacher_periods WHERE period_id = ?",
         [prevPeriodId]
       );
 
-      if (prevTeachers.length === 0) {
+      if (prevTeacherPeriods.length === 0) {
         return NextResponse.json(
           { success: false, message: `Tidak ada data guru pada periode sebelumnya (${prevPeriods[0].academic_year} - ${prevPeriods[0].semester})` },
           { status: 400 }
         );
       }
 
-      // Cek apakah target period sudah memiliki guru agar tidak duplikasi
-      const [existingTeachers]: any = await db.query(
-        "SELECT nip FROM teachers WHERE period_id = ?",
-        [targetPeriodId]
-      );
-      const existingNips = new Set(existingTeachers.map((t: any) => String(t.nip)));
-
       let copiedCount = 0;
-      for (const t of prevTeachers) {
-        if (!existingNips.has(String(t.nip))) {
-          await db.query(
-            `INSERT INTO teachers (name, email, nip, specialization, status, period_id)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [t.name, t.email, t.nip, t.specialization, t.status, targetPeriodId]
-          );
+      for (const tp of prevTeacherPeriods) {
+        const [result]: any = await db.query(
+          `INSERT IGNORE INTO teacher_periods (teacher_id, period_id, is_active)
+           VALUES (?, ?, 1)`,
+          [tp.teacher_id, targetPeriodId]
+        );
+        if (result.affectedRows > 0) {
           copiedCount++;
         }
       }
 
       return NextResponse.json({
         success: true,
-        message: `Berhasil menyalin ${copiedCount} data guru dari periode sebelumnya (${prevPeriods[0].academic_year} - ${prevPeriods[0].semester})`,
+        message: `Berhasil menyalin ${copiedCount} data guru ke periode aktif dari periode sebelumnya (${prevPeriods[0].academic_year} - ${prevPeriods[0].semester})`,
       });
     }
 
@@ -205,30 +234,51 @@ export async function POST(request: Request) {
       );
     }
 
-    // Cek duplikasi NIP pada periode yang sama
-    const [existing]: any = await db.query(
-      "SELECT id FROM teachers WHERE nip = ? AND period_id = ?",
-      [nip, periodId]
+    // 1. Dapatkan atau buat data guru master
+    let teacherId: number;
+    const [existingMaster]: any = await db.query(
+      "SELECT id FROM teachers WHERE nip = ? OR email = ?",
+      [nip, email]
     );
-    if (existing.length > 0) {
+
+    if (existingMaster.length > 0) {
+      teacherId = existingMaster[0].id;
+      // Update data guru jika ada perubahan
+      await db.query(
+        "UPDATE teachers SET name = ?, email = ?, specialization = ?, status = ? WHERE id = ?",
+        [name, email, specialization || "Akademik", status || "Aktif", teacherId]
+      );
+    } else {
+      const [insertRes]: any = await db.query(
+        `INSERT INTO teachers (name, email, nip, specialization, status)
+         VALUES (?, ?, ?, ?, ?)`,
+        [name, email, nip, specialization || "Akademik", status || "Aktif"]
+      );
+      teacherId = insertRes.insertId;
+    }
+
+    // 2. Hubungkan ke periode akademik
+    const [existingJunction]: any = await db.query(
+      "SELECT id FROM teacher_periods WHERE teacher_id = ? AND period_id = ?",
+      [teacherId, periodId]
+    );
+
+    if (existingJunction.length > 0) {
       return NextResponse.json(
-        { success: false, message: "Guru dengan NIP tersebut sudah terdaftar pada periode akademik ini" },
+        { success: false, message: "Guru tersebut sudah terdaftar pada periode akademik ini" },
         { status: 400 }
       );
     }
 
-    const [result]: any = await db.query(
-      `
-      INSERT INTO teachers (name, email, nip, specialization, status, period_id)
-      VALUES (?, ?, ?, ?, ?, ?)
-      `,
-      [name, email, nip, specialization || "Akademik", status || "Aktif", periodId]
+    await db.query(
+      "INSERT INTO teacher_periods (teacher_id, period_id, is_active) VALUES (?, ?, 1)",
+      [teacherId, periodId]
     );
 
     return NextResponse.json({
       success: true,
       message: "Data guru berhasil ditambahkan",
-      id: result.insertId,
+      id: teacherId,
     });
   } catch (error: any) {
     console.error("Teachers API POST Error:", error);

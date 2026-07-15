@@ -43,10 +43,13 @@ export async function GET(request: Request) {
         );
       }
 
-      // Ambil nama kelas terlebih dahulu
-      const [classRows]: any = await db.query("SELECT class_name FROM classes WHERE id = ?", [classId]);
-      const className = classRows[0]?.class_name;
-      if (!className) {
+      // Ambil class_period_id terlebih dahulu
+      const [classPeriodRows]: any = await db.query(
+        "SELECT id FROM class_periods WHERE class_id = ? AND period_id = ?",
+        [classId, activePeriodId]
+      );
+      const classPeriodId = classPeriodRows[0]?.id;
+      if (!classPeriodId) {
         return NextResponse.json({ success: true, data: [] });
       }
 
@@ -55,10 +58,11 @@ export async function GET(request: Request) {
         const [rows]: any = await db.query(
           `SELECT DATE_FORMAT(sa.date, '%Y-%m-%d') AS date, s.name, s.nisn, sa.status AS attendanceStatus
            FROM student_attendance sa
-           JOIN students s ON sa.student_id = s.id
-           WHERE s.class_label = ? AND sa.date BETWEEN ? AND ? AND sa.period_id = ?
+           JOIN student_periods sp ON sa.student_period_id = sp.id
+           JOIN students s ON sp.student_id = s.id
+           WHERE sp.class_period_id = ? AND sa.date BETWEEN ? AND ?
            ORDER BY sa.date ASC, s.name ASC`,
-          [className, startDate, endDate, activePeriodId]
+          [classPeriodId, startDate, endDate]
         );
         return NextResponse.json({ success: true, data: rows });
       } else {
@@ -66,11 +70,12 @@ export async function GET(request: Request) {
         const [rows]: any = await db.query(
           `SELECT s.id, s.name, s.gender_text, s.gender_code, s.nisn, s.status AS studentStatus,
                   sa.status AS attendanceStatus
-           FROM students s
-           LEFT JOIN student_attendance sa ON s.id = sa.student_id AND sa.date = ? AND sa.period_id = ?
-           WHERE s.class_label = ?
+           FROM student_periods sp
+           JOIN students s ON sp.student_id = s.id
+           LEFT JOIN student_attendance sa ON sp.id = sa.student_period_id AND sa.date = ?
+           WHERE sp.class_period_id = ?
            ORDER BY s.name ASC`,
-          [date, activePeriodId, className]
+          [date, classPeriodId]
         );
 
         const formatted = rows.map((s: any) => {
@@ -97,10 +102,11 @@ export async function GET(request: Request) {
         const [rows]: any = await db.query(
           `SELECT DATE_FORMAT(ta.date, '%Y-%m-%d') AS date, t.name, t.nip, ta.status AS attendanceStatus, ta.check_in_time AS checkInTime, ta.check_out_time AS checkOutTime
            FROM teacher_attendance ta
-           JOIN teachers t ON ta.teacher_id = t.id
-           WHERE ta.date BETWEEN ? AND ? AND ta.period_id = ?
+           JOIN teacher_periods tp ON ta.teacher_period_id = tp.id
+           JOIN teachers t ON tp.teacher_id = t.id
+           WHERE tp.period_id = ? AND ta.date BETWEEN ? AND ?
            ORDER BY ta.date ASC, t.name ASC`,
-          [startDate, endDate, activePeriodId]
+          [activePeriodId, startDate, endDate]
         );
         return NextResponse.json({ success: true, data: rows });
       } else {
@@ -108,8 +114,10 @@ export async function GET(request: Request) {
         const [rows]: any = await db.query(
           `SELECT t.id, t.name, t.email, t.nip, t.specialization, t.status AS teacherStatus,
                   ta.status AS attendanceStatus, ta.check_in_time AS checkInTime, ta.check_out_time AS checkOutTime
-           FROM teachers t
-           LEFT JOIN teacher_attendance ta ON t.id = ta.teacher_id AND ta.date = ? AND ta.period_id = ?
+           FROM teacher_periods tp
+           JOIN teachers t ON tp.teacher_id = t.id
+           LEFT JOIN teacher_attendance ta ON tp.id = ta.teacher_period_id AND ta.date = ?
+           WHERE tp.period_id = ?
            ORDER BY t.name ASC`,
           [date, activePeriodId]
         );
@@ -140,10 +148,11 @@ export async function GET(request: Request) {
         const [rows]: any = await db.query(
           `SELECT DATE_FORMAT(ca.date, '%Y-%m-%d') AS date, c.name, c.id_number AS idNumber, ca.status AS attendanceStatus, ca.check_in_time AS checkInTime, ca.check_out_time AS checkOutTime
            FROM coach_attendance ca
-           JOIN coaches c ON ca.coach_id = c.id
-           WHERE ca.date BETWEEN ? AND ? AND ca.period_id = ?
+           JOIN coach_periods cp ON ca.coach_period_id = cp.id
+           JOIN coaches c ON cp.coach_id = c.id
+           WHERE cp.period_id = ? AND ca.date BETWEEN ? AND ?
            ORDER BY ca.date ASC, c.name ASC`,
-          [startDate, endDate, activePeriodId]
+          [activePeriodId, startDate, endDate]
         );
         return NextResponse.json({ success: true, data: rows });
       } else {
@@ -151,8 +160,10 @@ export async function GET(request: Request) {
         const [rows]: any = await db.query(
           `SELECT c.id, c.name, c.email, c.id_number AS idNumber, c.specialization, c.status AS coachStatus,
                   ca.status AS attendanceStatus, ca.check_in_time AS checkInTime, ca.check_out_time AS checkOutTime
-           FROM coaches c
-           LEFT JOIN coach_attendance ca ON c.id = ca.coach_id AND ca.date = ? AND ca.period_id = ?
+           FROM coach_periods cp
+           JOIN coaches c ON cp.coach_id = c.id
+           LEFT JOIN coach_attendance ca ON cp.id = ca.coach_period_id AND ca.date = ?
+           WHERE cp.period_id = ?
            ORDER BY c.name ASC`,
           [date, activePeriodId]
         );
@@ -185,27 +196,43 @@ export async function GET(request: Request) {
         );
       }
 
+      // Ambil extracurricular_period_id
+      const [ekskulPeriodRows]: any = await db.query(
+        "SELECT id FROM extracurricular_periods WHERE extracurricular_id = ? AND period_id = ?",
+        [extracurricularId, activePeriodId]
+      );
+      const epId = ekskulPeriodRows[0]?.id;
+      if (!epId) {
+        return NextResponse.json({ success: true, data: [] });
+      }
+
       if (isRange) {
         const [rows]: any = await db.query(
-          `SELECT DATE_FORMAT(sa.date, '%Y-%m-%d') AS date, s.name, s.nisn, s.class_label AS classLabel, sa.status AS attendanceStatus
+          `SELECT DATE_FORMAT(sa.date, '%Y-%m-%d') AS date, s.name, s.nisn, cl.class_name AS classLabel, sa.status AS attendanceStatus
            FROM student_attendance sa
-           JOIN students s ON sa.student_id = s.id
-           JOIN extracurricular_students es ON es.student_id = s.id
-           WHERE es.extracurricular_id = ? AND sa.date BETWEEN ? AND ? AND sa.period_id = ?
+           JOIN student_periods sp ON sa.student_period_id = sp.id
+           JOIN students s ON sp.student_id = s.id
+           JOIN extracurricular_students es ON es.student_period_id = sp.id
+           LEFT JOIN class_periods clp ON sp.class_period_id = clp.id
+           LEFT JOIN classes cl ON clp.class_id = cl.id
+           WHERE es.extracurricular_period_id = ? AND sa.date BETWEEN ? AND ?
            ORDER BY sa.date ASC, s.name ASC`,
-          [extracurricularId, startDate, endDate, activePeriodId]
+          [epId, startDate, endDate]
         );
         return NextResponse.json({ success: true, data: rows });
       } else {
         const [rows]: any = await db.query(
-          `SELECT s.id, s.name, s.gender_text, s.gender_code, s.nisn, s.class_label,
+          `SELECT s.id, s.name, s.gender_text, s.gender_code, s.nisn, cl.class_name AS class_label,
                   sa.status AS attendanceStatus
            FROM extracurricular_students es
-           JOIN students s ON es.student_id = s.id
-           LEFT JOIN student_attendance sa ON s.id = sa.student_id AND sa.date = ? AND sa.period_id = ?
-           WHERE es.extracurricular_id = ?
+           JOIN student_periods sp ON es.student_period_id = sp.id
+           JOIN students s ON sp.student_id = s.id
+           LEFT JOIN class_periods clp ON sp.class_period_id = clp.id
+           LEFT JOIN classes cl ON clp.class_id = cl.id
+           LEFT JOIN student_attendance sa ON sp.id = sa.student_period_id AND sa.date = ?
+           WHERE es.extracurricular_period_id = ?
            ORDER BY s.name ASC`,
-          [date, activePeriodId, extracurricularId]
+          [date, epId]
         );
 
         const formatted = rows.map((s: any) => {
@@ -217,7 +244,7 @@ export async function GET(request: Request) {
           return {
             id: String(s.id),
             name: s.name,
-            class_label: s.class_label,
+            class_label: s.class_label || "",
             nisn: s.nisn,
             initials,
             status: s.attendanceStatus || null
@@ -241,7 +268,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    let { type, date, attendance, classId, subjectId, extracurricularId, periodId } = body;
+    let { type, date, attendance, classId, extracurricularId, periodId } = body;
 
     if (!type || !date || !Array.isArray(attendance)) {
       return NextResponse.json(
@@ -268,27 +295,39 @@ export async function POST(request: Request) {
       for (const item of attendance) {
         const { studentId, status } = item;
         
-        const [existing]: any = await db.query(
-          "SELECT id FROM student_attendance WHERE student_id = ? AND date = ? AND period_id = ?",
-          [studentId, date, activePeriodId]
+        // Dapatkan student_period_id
+        const [spRow]: any = await db.query(
+          "SELECT id FROM student_periods WHERE student_id = ? AND period_id = ?",
+          [studentId, activePeriodId]
         );
+        const studentPeriodId = spRow[0]?.id;
 
-        if (existing.length > 0) {
-          await db.query(
-            "UPDATE student_attendance SET status = ? WHERE id = ?",
-            [status, existing[0].id]
+        if (studentPeriodId) {
+          const [existing]: any = await db.query(
+            "SELECT id FROM student_attendance WHERE student_period_id = ? AND date = ?",
+            [studentPeriodId, date]
           );
-        } else {
-          await db.query(
-            "INSERT INTO student_attendance (student_id, status, date, period_id) VALUES (?, ?, ?, ?)",
-            [studentId, status, date, activePeriodId]
-          );
+
+          if (existing.length > 0) {
+            await db.query(
+              "UPDATE student_attendance SET status = ? WHERE id = ?",
+              [status, existing[0].id]
+            );
+          } else {
+            await db.query(
+              "INSERT INTO student_attendance (student_period_id, status, date) VALUES (?, ?, ?)",
+              [studentPeriodId, status, date]
+            );
+          }
         }
       }
 
       // Log aktivitas
-      const [classInfo]: any = await db.query("SELECT class_name FROM classes WHERE id = ?", [classId]);
-      const className = classInfo[0]?.class_name || "Kelas";
+      let className = "Kelas";
+      if (classId) {
+        const [classInfo]: any = await db.query("SELECT class_name FROM classes WHERE id = ?", [classId]);
+        className = classInfo[0]?.class_name || "Kelas";
+      }
       await db.query(
         "INSERT INTO activity_logs (action, target, details) VALUES (?, ?, ?)",
         ["Presensi Siswa", className, `Mencatat kehadiran siswa kelas ${className} untuk tanggal ${date}`]
@@ -300,21 +339,30 @@ export async function POST(request: Request) {
       for (const item of attendance) {
         const { teacherId, status, checkInTime, checkOutTime } = item;
 
-        const [existing]: any = await db.query(
-          "SELECT id FROM teacher_attendance WHERE teacher_id = ? AND date = ? AND period_id = ?",
-          [teacherId, date, activePeriodId]
+        // Dapatkan teacher_period_id
+        const [tpRow]: any = await db.query(
+          "SELECT id FROM teacher_periods WHERE teacher_id = ? AND period_id = ?",
+          [teacherId, activePeriodId]
         );
+        const teacherPeriodId = tpRow[0]?.id;
 
-        if (existing.length > 0) {
-          await db.query(
-            "UPDATE teacher_attendance SET status = ?, check_in_time = ?, check_out_time = ? WHERE id = ?",
-            [status, checkInTime || "-- : --", checkOutTime || "-- : --", existing[0].id]
+        if (teacherPeriodId) {
+          const [existing]: any = await db.query(
+            "SELECT id FROM teacher_attendance WHERE teacher_period_id = ? AND date = ?",
+            [teacherPeriodId, date]
           );
-        } else {
-          await db.query(
-            "INSERT INTO teacher_attendance (teacher_id, check_in_time, check_out_time, status, date, period_id) VALUES (?, ?, ?, ?, ?, ?)",
-            [teacherId, checkInTime || "-- : --", checkOutTime || "-- : --", status, date, activePeriodId]
-          );
+
+          if (existing.length > 0) {
+            await db.query(
+              "UPDATE teacher_attendance SET status = ?, check_in_time = ?, check_out_time = ? WHERE id = ?",
+              [status, checkInTime || "-- : --", checkOutTime || "-- : --", existing[0].id]
+            );
+          } else {
+            await db.query(
+              "INSERT INTO teacher_attendance (teacher_period_id, check_in_time, check_out_time, status, date) VALUES (?, ?, ?, ?, ?)",
+              [teacherPeriodId, checkInTime || "-- : --", checkOutTime || "-- : --", status, date]
+            );
+          }
         }
       }
 
@@ -329,21 +377,30 @@ export async function POST(request: Request) {
       for (const item of attendance) {
         const { coachId, status, checkInTime, checkOutTime } = item;
 
-        const [existing]: any = await db.query(
-          "SELECT id FROM coach_attendance WHERE coach_id = ? AND date = ? AND period_id = ?",
-          [coachId, date, activePeriodId]
+        // Dapatkan coach_period_id
+        const [cpRow]: any = await db.query(
+          "SELECT id FROM coach_periods WHERE coach_id = ? AND period_id = ?",
+          [coachId, activePeriodId]
         );
+        const coachPeriodId = cpRow[0]?.id;
 
-        if (existing.length > 0) {
-          await db.query(
-            "UPDATE coach_attendance SET status = ?, check_in_time = ?, check_out_time = ? WHERE id = ?",
-            [status, checkInTime || "-- : --", checkOutTime || "-- : --", existing[0].id]
+        if (coachPeriodId) {
+          const [existing]: any = await db.query(
+            "SELECT id FROM coach_attendance WHERE coach_period_id = ? AND date = ?",
+            [coachPeriodId, date]
           );
-        } else {
-          await db.query(
-            "INSERT INTO coach_attendance (coach_id, check_in_time, check_out_time, status, date, period_id) VALUES (?, ?, ?, ?, ?, ?)",
-            [coachId, checkInTime || "-- : --", checkOutTime || "-- : --", status, date, activePeriodId]
-          );
+
+          if (existing.length > 0) {
+            await db.query(
+              "UPDATE coach_attendance SET status = ?, check_in_time = ?, check_out_time = ? WHERE id = ?",
+              [status, checkInTime || "-- : --", checkOutTime || "-- : --", existing[0].id]
+            );
+          } else {
+            await db.query(
+              "INSERT INTO coach_attendance (coach_period_id, check_in_time, check_out_time, status, date) VALUES (?, ?, ?, ?, ?)",
+              [coachPeriodId, checkInTime || "-- : --", checkOutTime || "-- : --", status, date]
+            );
+          }
         }
       }
 
@@ -358,34 +415,44 @@ export async function POST(request: Request) {
       for (const item of attendance) {
         const { studentId, status } = item;
 
-        const [existing]: any = await db.query(
-          "SELECT id FROM student_attendance WHERE student_id = ? AND date = ? AND period_id = ?",
-          [studentId, date, activePeriodId]
+        // Dapatkan student_period_id
+        const [spRow]: any = await db.query(
+          "SELECT id FROM student_periods WHERE student_id = ? AND period_id = ?",
+          [studentId, activePeriodId]
         );
+        const studentPeriodId = spRow[0]?.id;
 
-        if (existing.length > 0) {
-          await db.query(
-            "UPDATE student_attendance SET status = ? WHERE id = ?",
-            [status, existing[0].id]
+        if (studentPeriodId) {
+          const [existing]: any = await db.query(
+            "SELECT id FROM student_attendance WHERE student_period_id = ? AND date = ?",
+            [studentPeriodId, date]
           );
-        } else {
-          await db.query(
-            "INSERT INTO student_attendance (student_id, status, date, period_id) VALUES (?, ?, ?, ?)",
-            [studentId, status, date, activePeriodId]
-          );
+
+          if (existing.length > 0) {
+            await db.query(
+              "UPDATE student_attendance SET status = ? WHERE id = ?",
+              [status, existing[0].id]
+            );
+          } else {
+            await db.query(
+              "INSERT INTO student_attendance (student_period_id, status, date) VALUES (?, ?, ?)",
+              [studentPeriodId, status, date]
+            );
+          }
         }
       }
 
-      // Log aktivitas
-      const [ekskulInfo]: any = await db.query("SELECT name FROM extracurriculars WHERE id = ?", [extracurricularId]);
-      const ekskulName = ekskulInfo[0]?.name || "Ekstrakurikuler";
+      let ekskulName = "Ekstrakurikuler";
+      if (extracurricularId) {
+        const [ekskulInfo]: any = await db.query("SELECT name FROM extracurriculars WHERE id = ?", [extracurricularId]);
+        ekskulName = ekskulInfo[0]?.name || "Ekstrakurikuler";
+      }
       await db.query(
         "INSERT INTO activity_logs (action, target, details) VALUES (?, ?, ?)",
         ["Presensi Ekskul", ekskulName, `Mencatat kehadiran siswa ekskul ${ekskulName} untuk tanggal ${date}`]
       );
 
       return NextResponse.json({ success: true, message: "Kehadiran siswa ekskul berhasil disimpan" });
-
     } else {
       return NextResponse.json(
         { success: false, message: "Tipe presensi tidak dikenali" },

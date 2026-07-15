@@ -213,7 +213,7 @@ export default function GuruPage() {
           <Button
             onClick={handleCopyPrevious}
             disabled={copying}
-            className="!w-auto !py-2.5 !px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 text-xs font-semibold rounded-lg flex items-center gap-2 shadow-sm disabled:opacity-50"
+            className="!w-auto !py-2.5 !px-5 bg-white border border-slate-200 !text-black hover:bg-slate-50 hover:text-slate-900 text-xs font-semibold rounded-lg flex items-center gap-2 shadow-sm disabled:opacity-50"
           >
             <Copy className="w-4 h-4" />
             {copying ? "Menyalin..." : "Salin Data Guru Periode Sebelumnya"}
@@ -246,7 +246,7 @@ export default function GuruPage() {
 
       {/* Filter & Table Container */}
       <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.02)] overflow-hidden">
-        
+
         {/* Filter Controls Bar */}
         <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
@@ -324,7 +324,7 @@ export default function GuruPage() {
               ) : (
                 teachers.map((teacher) => (
                   <tr key={teacher.id} className="hover:bg-slate-50/50 transition-all">
-                    
+
                     {/* Name and Email */}
                     <td className="py-4 px-6 flex items-center gap-3">
                       {/* Initials Avatar */}
@@ -347,11 +347,10 @@ export default function GuruPage() {
                     {/* Specialization */}
                     <td className="py-4 px-6">
                       <span
-                        className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${
-                          teacher.specialization === "Akademik"
-                            ? "bg-blue-50 text-blue-600"
-                            : "bg-slate-100 text-slate-500"
-                        }`}
+                        className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${teacher.specialization === "Akademik"
+                          ? "bg-blue-50 text-blue-600"
+                          : "bg-slate-100 text-slate-500"
+                          }`}
                       >
                         {teacher.specialization}
                       </span>
@@ -370,11 +369,10 @@ export default function GuruPage() {
                     {/* Status */}
                     <td className="py-4 px-6">
                       <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                          teacher.status === "Aktif"
-                            ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
-                            : "bg-rose-50 text-rose-600 border border-rose-100"
-                        }`}
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${teacher.status === "Aktif"
+                          ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                          : "bg-rose-50 text-rose-600 border border-rose-100"
+                          }`}
                       >
                         {teacher.status}
                       </span>
@@ -389,7 +387,7 @@ export default function GuruPage() {
                         <Link href={`/dashboard/guru/edit?id=${teacher.id}`} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all">
                           <Pencil className="w-4 h-4" />
                         </Link>
-                        <button 
+                        <button
                           onClick={() => handleDelete(teacher.id)}
                           className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
                         >
@@ -410,41 +408,38 @@ export default function GuruPage() {
           <span className="text-xs font-semibold text-slate-400">
             Menampilkan {startEntry} sampai {endEntry} dari {filteredTotal} data guru
           </span>
-          
+
           <div className="flex items-center gap-1">
             {/* Prev */}
-            <button 
+            <button
               disabled={currentPage === 1}
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              className={`p-1.5 rounded-lg border border-slate-100 text-slate-400 transition-all ${
-                currentPage === 1 ? "opacity-40 cursor-not-allowed" : "hover:bg-slate-50"
-              }`}
+              className={`p-1.5 rounded-lg border border-slate-100 text-slate-400 transition-all ${currentPage === 1 ? "opacity-40 cursor-not-allowed" : "hover:bg-slate-50"
+                }`}
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            
+
             {/* Page Buttons */}
             {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
               <button
                 key={p}
                 onClick={() => setCurrentPage(p)}
-                className={`w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center transition-all ${
-                  currentPage === p
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "hover:bg-slate-50 text-slate-600 font-semibold"
-                }`}
+                className={`w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center transition-all ${currentPage === p
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "hover:bg-slate-50 text-slate-600 font-semibold"
+                  }`}
               >
                 {p}
               </button>
             ))}
 
             {/* Next */}
-            <button 
+            <button
               disabled={currentPage === totalPages || totalPages === 0}
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              className={`p-1.5 rounded-lg border border-slate-100 text-slate-400 transition-all ${
-                currentPage === totalPages || totalPages === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-slate-50"
-              }`}
+              className={`p-1.5 rounded-lg border border-slate-100 text-slate-400 transition-all ${currentPage === totalPages || totalPages === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-slate-50"
+                }`}
             >
               <ChevronRight className="w-4 h-4" />
             </button>

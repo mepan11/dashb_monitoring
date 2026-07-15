@@ -7,15 +7,29 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const url = new URL(request.url);
+    const periodIdParam = url.searchParams.get("period_id");
+
+    let activePeriodId = periodIdParam;
+    if (!activePeriodId || activePeriodId === "undefined") {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
+    }
+
     const [rows]: any = await db.query(
-      "SELECT id, name, code, description, period_id FROM subjects WHERE id = ?",
-      [id]
+      `SELECT s.id, s.name, s.code, s.description, sp.period_id 
+       FROM subjects s
+       JOIN subject_periods sp ON s.id = sp.subject_id
+       WHERE s.id = ? AND sp.period_id = ?`,
+      [id, activePeriodId]
     );
 
     const subject = rows[0];
     if (!subject) {
       return NextResponse.json(
-        { success: false, message: "Mata pelajaran tidak ditemukan" },
+        { success: false, message: "Mata pelajaran tidak ditemukan untuk periode ini" },
         { status: 404 }
       );
     }
@@ -45,16 +59,20 @@ export async function PUT(
       );
     }
 
-    // Ambil period_id saat ini jika tidak disediakan
+    // Resolusi period_id saat ini jika tidak disediakan
     let targetPeriodId = periodId;
     if (!targetPeriodId) {
-      const [current]: any = await db.query("SELECT period_id FROM subjects WHERE id = ?", [id]);
-      targetPeriodId = current[0]?.period_id || null;
+      const [current]: any = await db.query(
+        "SELECT period_id FROM subject_periods WHERE subject_id = ? LIMIT 1",
+        [id]
+      );
+      targetPeriodId = current[0]?.period_id || 1;
     }
 
+    // 1. Update subject master
     const [result]: any = await db.query(
-      "UPDATE subjects SET name = ?, code = ?, description = ?, period_id = ? WHERE id = ?",
-      [name, code, description || "", targetPeriodId, id]
+      "UPDATE subjects SET name = ?, code = ?, description = ? WHERE id = ?",
+      [name, code, description || "", id]
     );
 
     if (result.affectedRows === 0) {
@@ -63,6 +81,12 @@ export async function PUT(
         { status: 404 }
       );
     }
+
+    // 2. Link in subject_periods
+    await db.query(
+      "INSERT IGNORE INTO subject_periods (subject_id, period_id, is_active) VALUES (?, ?, 1)",
+      [id, targetPeriodId]
+    );
 
     return NextResponse.json({
       success: true,
@@ -84,9 +108,7 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // Hapus relasi class_subjects terlebih dahulu
-    await db.query("DELETE FROM class_subjects WHERE subject_id = ?", [id]);
-
+    // Delete subject master (cascades to subject_periods, etc.)
     const [result]: any = await db.query("DELETE FROM subjects WHERE id = ?", [id]);
 
     if (result.affectedRows === 0) {

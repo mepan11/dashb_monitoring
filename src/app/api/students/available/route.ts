@@ -14,12 +14,13 @@ export async function GET(request: Request) {
       targetPeriodId = activePeriod[0]?.id || 1;
     }
 
-    // Get all students in the period where class_label is NULL or empty (not assigned to any class yet)
+    // Get all students in the period where class_period_id is NULL (not assigned to any class yet)
     const [students]: any = await db.query(
-      `SELECT id, name, nisn, class_label AS classLabel 
-       FROM students 
-       WHERE period_id = ? AND (class_label IS NULL OR class_label = '' OR class_label = '—')
-       ORDER BY name ASC`,
+      `SELECT s.id, s.name, s.nisn, '' AS classLabel 
+       FROM students s
+       JOIN student_periods sp ON s.id = sp.student_id
+       WHERE sp.period_id = ? AND sp.class_period_id IS NULL
+       ORDER BY s.name ASC`,
       [targetPeriodId]
     );
 

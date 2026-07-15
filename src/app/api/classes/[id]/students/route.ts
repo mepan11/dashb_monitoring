@@ -7,31 +7,44 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const url = new URL(request.url);
+    const periodId = url.searchParams.get("period_id");
 
-    // Get class info
-    const [classRows]: any = await db.query(
-      `SELECT c.id, c.class_name AS className, t.name AS homeroomTeacher
-       FROM classes c
-       LEFT JOIN teachers t ON c.homeroom_teacher_id = t.id
-       WHERE c.id = ?`,
-      [id]
+    let activePeriodId = periodId;
+    if (!activePeriodId || activePeriodId === "undefined") {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
+    }
+
+    // Get class_period info
+    const [classPeriodRows]: any = await db.query(
+      `SELECT clp.id AS class_period_id, c.class_name AS className, t.name AS homeroomTeacher
+       FROM class_periods clp
+       JOIN classes c ON clp.class_id = c.id
+       LEFT JOIN teacher_periods tp ON clp.homeroom_teacher_id = tp.id
+       LEFT JOIN teachers t ON tp.teacher_id = t.id
+       WHERE clp.class_id = ? AND clp.period_id = ?`,
+      [id, activePeriodId]
     );
 
-    const cls = classRows[0];
+    const cls = classPeriodRows[0];
     if (!cls) {
       return NextResponse.json(
-        { success: false, message: "Kelas tidak ditemukan" },
+        { success: false, message: "Kelas tidak ditemukan untuk periode akademik ini" },
         { status: 404 }
       );
     }
 
-    // Get students belonging to this class
+    // Get students belonging to this class period
     const [studentRows]: any = await db.query(
-      `SELECT id, name, gender_text, gender_code, nisn, status 
-       FROM students 
-       WHERE class_label = ?
-       ORDER BY name ASC`,
-      [cls.className]
+      `SELECT s.id, s.name, s.gender_text, s.gender_code, s.nisn, s.status 
+       FROM student_periods sp
+       JOIN students s ON sp.student_id = s.id 
+       WHERE sp.class_period_id = ?
+       ORDER BY s.name ASC`,
+      [cls.class_period_id]
     );
 
     const total = studentRows.length;
@@ -76,8 +89,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const { studentId } = await request.json();
+    const { id } = await params; // class_id
+    const { studentId, periodId } = await request.json();
 
     if (!studentId) {
       return NextResponse.json(
@@ -86,43 +99,59 @@ export async function POST(
       );
     }
 
-    // Get class name
-    const [classRows]: any = await db.query(
-      "SELECT class_name FROM classes WHERE id = ?",
-      [id]
+    let activePeriodId = periodId;
+    if (!activePeriodId) {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
+    }
+
+    // Resolve class_period_id
+    const [classPeriodRows]: any = await db.query(
+      "SELECT id, class_id FROM class_periods WHERE class_id = ? AND period_id = ?",
+      [id, activePeriodId]
     );
-    const cls = classRows[0];
-    if (!cls) {
+    const classPeriod = classPeriodRows[0];
+    if (!classPeriod) {
       return NextResponse.json(
-        { success: false, message: "Kelas tidak ditemukan" },
+        { success: false, message: "Kelas tidak ditemukan untuk periode akademik ini" },
         { status: 404 }
       );
     }
 
-    // Check if student already has a class in the current period
-    const [studentRows]: any = await db.query(
-      "SELECT name, class_label FROM students WHERE id = ?",
-      [studentId]
+    // Get student_period details to check if they already have a class in the current period
+    const [spRows]: any = await db.query(
+      `SELECT sp.id, sp.class_period_id, s.name, c.class_name 
+       FROM student_periods sp 
+       JOIN students s ON sp.student_id = s.id
+       LEFT JOIN class_periods clp ON sp.class_period_id = clp.id
+       LEFT JOIN classes c ON clp.class_id = c.id
+       WHERE sp.student_id = ? AND sp.period_id = ?`,
+      [studentId, activePeriodId]
     );
-    const student = studentRows[0];
-    if (!student) {
-      return NextResponse.json(
-        { success: false, message: "Siswa tidak ditemukan" },
-        { status: 404 }
+    
+    let studentPeriod = spRows[0];
+    if (!studentPeriod) {
+      // Create student_period link first
+      const [insertSpRes]: any = await db.query(
+        "INSERT INTO student_periods (student_id, period_id, class_period_id, is_active) VALUES (?, ?, NULL, 1)",
+        [studentId, activePeriodId]
       );
+      studentPeriod = { id: insertSpRes.insertId, class_period_id: null, name: "", class_name: null };
     }
 
-    if (student.class_label && student.class_label !== "—" && student.class_label !== "") {
+    if (studentPeriod.class_period_id) {
       return NextResponse.json(
-        { success: false, message: `Siswa ${student.name} sudah terdaftar di kelas ${student.class_label} pada periode ini` },
+        { success: false, message: `Siswa sudah terdaftar di kelas ${studentPeriod.class_name || "lain"} pada periode ini` },
         { status: 400 }
       );
     }
 
-    // Update class_label of student
+    // Update class_period_id of student_periods
     await db.query(
-      "UPDATE students SET class_label = ? WHERE id = ?",
-      [cls.class_name, studentId]
+      "UPDATE student_periods SET class_period_id = ? WHERE id = ?",
+      [classPeriod.id, studentPeriod.id]
     );
 
     return NextResponse.json({
@@ -143,9 +172,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { id } = await params; // class_id
     const url = new URL(request.url);
     const studentId = url.searchParams.get("studentId");
+    const periodId = url.searchParams.get("period_id");
 
     if (!studentId) {
       return NextResponse.json(
@@ -154,10 +184,20 @@ export async function DELETE(
       );
     }
 
-    // Set class_label to NULL to remove student from this class
+    let activePeriodId = periodId;
+    if (!activePeriodId || activePeriodId === "undefined") {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
+    }
+
+    // Set class_period_id to NULL for this student period
     await db.query(
-      "UPDATE students SET class_label = NULL WHERE id = ?",
-      [studentId]
+      `UPDATE student_periods 
+       SET class_period_id = NULL 
+       WHERE student_id = ? AND period_id = ?`,
+      [studentId, activePeriodId]
     );
 
     return NextResponse.json({

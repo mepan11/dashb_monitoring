@@ -10,8 +10,16 @@ export async function GET(
     const url = new URL(request.url);
     const periodIdParam = url.searchParams.get("period_id");
 
+    let activePeriodId = periodIdParam;
+    if (!activePeriodId || activePeriodId === "undefined") {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
+    }
+
     const [rows]: any = await db.query(
-      "SELECT id, name, gender_text, gender_code, nisn, class_label, status, period_id FROM students WHERE id = ?",
+      "SELECT id, name, gender_text, gender_code, nisn, status FROM students WHERE id = ?",
       [id]
     );
 
@@ -23,7 +31,17 @@ export async function GET(
       );
     }
 
-    const activePeriodId = periodIdParam || student.period_id || 1;
+    // Find student_period
+    const [spRows]: any = await db.query(
+      `SELECT sp.id, cl.class_name AS class_label 
+       FROM student_periods sp 
+       LEFT JOIN class_periods clp ON sp.class_period_id = clp.id
+       LEFT JOIN classes cl ON clp.class_id = cl.id
+       WHERE sp.student_id = ? AND sp.period_id = ?`,
+      [id, activePeriodId]
+    );
+    const studentPeriod = spRows[0] || null;
+    const studentPeriodId = studentPeriod?.id;
 
     const nameParts = student.name.trim().split(" ");
     const initials =
@@ -31,40 +49,58 @@ export async function GET(
         ? `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase()
         : `${nameParts[0][0] || "S"}`.toUpperCase();
 
-    // Attendance rate filtered by period_id
-    const [attRows]: any = await db.query(
-      `SELECT COUNT(*) AS total,
-              SUM(CASE WHEN status = 'Hadir' THEN 1 ELSE 0 END) AS hadir
-       FROM student_attendance WHERE student_id = ? AND period_id = ?`,
-      [id, activePeriodId]
-    );
-    const attTotal = Number(attRows[0]?.total) || 0;
-    const attHadir = Number(attRows[0]?.hadir) || 0;
-    const attendanceRate = attTotal > 0 ? Math.round((attHadir / attTotal) * 100) : null;
+    let attendanceRate = null;
+    let grades: any[] = [];
+    let homeroomTeacher = null;
+    let academicYear = "2025/2026";
 
-    // Grades from this student filtered by period_id
-    const [gradeRows]: any = await db.query(
-      `SELECT g.daily_assignment, g.uts, g.uas, g.average,
-              subj.name AS subject_name
-       FROM grades g
-       JOIN classes c ON g.class_id = c.id
-       LEFT JOIN class_subjects cs ON cs.class_id = c.id
-       LEFT JOIN subjects subj ON cs.subject_id = subj.id
-       WHERE g.student_id = ? AND g.period_id = ?
-       LIMIT 10`,
-      [id, activePeriodId]
-    );
+    if (studentPeriodId) {
+      // Attendance rate filtered by student_period_id
+      const [attRows]: any = await db.query(
+        `SELECT COUNT(*) AS total,
+                SUM(CASE WHEN status = 'Hadir' THEN 1 ELSE 0 END) AS hadir
+         FROM student_attendance WHERE student_period_id = ?`,
+        [studentPeriodId]
+      );
+      const attTotal = Number(attRows[0]?.total) || 0;
+      const attHadir = Number(attRows[0]?.hadir) || 0;
+      attendanceRate = attTotal > 0 ? Math.round((attHadir / attTotal) * 100) : null;
 
-    // Homeroom teacher from classes matched to student class_label and period_id
-    const [hrtRows]: any = await db.query(
-      `SELECT t.name AS teacher_name, c.class_name, c.academic_year
-       FROM classes c
-       LEFT JOIN teachers t ON c.homeroom_teacher_id = t.id
-       WHERE c.class_name LIKE ? AND c.period_id = ?
-       LIMIT 1`,
-      [`%${student.class_label.replace("Kelas ", "").trim()}%`, activePeriodId]
-    );
-    const hrt = hrtRows[0] || null;
+      // Grades from this student
+      const [gradeRows]: any = await db.query(
+        `SELECT g.daily_assignment, g.uts, g.uas, g.average,
+                subj.name AS subject_name
+         FROM grades g
+         JOIN class_periods clp ON g.class_period_id = clp.id
+         LEFT JOIN class_subjects cs ON cs.class_period_id = clp.id
+         LEFT JOIN subject_periods sp ON cs.subject_period_id = sp.id
+         LEFT JOIN subjects subj ON sp.subject_id = subj.id
+         WHERE g.student_period_id = ?
+         LIMIT 10`,
+        [studentPeriodId]
+      );
+      grades = gradeRows;
+
+      // Homeroom teacher
+      if (studentPeriod?.class_label) {
+        const [hrtRows]: any = await db.query(
+          `SELECT t.name AS teacher_name, c.class_name, ap.academic_year
+           FROM class_periods clp
+           JOIN classes c ON clp.class_id = c.id
+           JOIN academic_periods ap ON clp.period_id = ap.id
+           LEFT JOIN teacher_periods tp ON clp.homeroom_teacher_id = tp.id
+           LEFT JOIN teachers t ON tp.teacher_id = t.id
+           WHERE c.class_name = ? AND clp.period_id = ?
+           LIMIT 1`,
+          [studentPeriod.class_label, activePeriodId]
+        );
+        const hrt = hrtRows[0];
+        if (hrt) {
+          homeroomTeacher = hrt.teacher_name;
+          academicYear = hrt.academic_year;
+        }
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -74,14 +110,14 @@ export async function GET(
         genderText: student.gender_text,
         genderCode: student.gender_code,
         nisn: student.nisn,
-        classLabel: student.class_label,
+        classLabel: studentPeriod?.class_label || "",
         status: student.status,
-        periodId: student.period_id,
+        periodId: activePeriodId,
         initials,
         attendanceRate,
-        grades: gradeRows,
-        homeroomTeacher: hrt?.teacher_name || null,
-        academicYear: hrt?.academic_year || "2025/2026",
+        grades,
+        homeroomTeacher,
+        academicYear,
       },
     });
   } catch (error: any) {
@@ -108,19 +144,22 @@ export async function PUT(
       );
     }
 
-    // Ambil period_id saat ini jika tidak disediakan
-    let targetPeriodId = periodId;
-    if (!targetPeriodId) {
-      const [current]: any = await db.query("SELECT period_id FROM students WHERE id = ?", [id]);
-      targetPeriodId = current[0]?.period_id || null;
+    // Resolusi periodId
+    let activePeriodId = periodId;
+    if (!activePeriodId) {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
     }
 
     const genderText = genderCode === "P" ? "Perempuan" : "Laki-laki";
 
+    // 1. Update student master data
     const [result]: any = await db.query(
-      `UPDATE students SET name = ?, gender_text = ?, gender_code = ?, nisn = ?, class_label = ?, status = ?, period_id = ?
+      `UPDATE students SET name = ?, gender_text = ?, gender_code = ?, nisn = ?, status = ?
        WHERE id = ?`,
-      [name, genderText, genderCode, nisn, classLabel || null, status, targetPeriodId, id]
+      [name, genderText, genderCode, nisn, status, id]
     );
 
     if (result.affectedRows === 0) {
@@ -129,6 +168,29 @@ export async function PUT(
         { status: 404 }
       );
     }
+
+    // 2. Resolve class_period_id from classLabel
+    let classPeriodId = null;
+    if (classLabel) {
+      const targetClassName = classLabel.startsWith("Kelas") ? classLabel : `Kelas ${classLabel}`;
+      const [classPeriodRow]: any = await db.query(
+        `SELECT clp.id FROM class_periods clp 
+         JOIN classes c ON clp.class_id = c.id 
+         WHERE c.class_name = ? AND clp.period_id = ?`,
+        [targetClassName, activePeriodId]
+      );
+      if (classPeriodRow.length > 0) {
+        classPeriodId = classPeriodRow[0].id;
+      }
+    }
+
+    // 3. Link or update in student_periods
+    await db.query(
+      `INSERT INTO student_periods (student_id, period_id, class_period_id, is_active)
+       VALUES (?, ?, ?, 1)
+       ON DUPLICATE KEY UPDATE class_period_id = ?`,
+      [id, activePeriodId, classPeriodId, classPeriodId]
+    );
 
     return NextResponse.json({
       success: true,

@@ -6,29 +6,36 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const periodId = url.searchParams.get("period_id");
 
+    let activePeriodId = periodId;
+    if (!activePeriodId || activePeriodId === "undefined") {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
+    }
+
     let query = `
       SELECT c.id, 
              c.class_name AS name,
              c.class_name AS className, 
              t.name AS homeroomTeacher,
-             c.homeroom_teacher_id AS homeroomTeacherId,
+             tp.teacher_id AS homeroomTeacherId,
              c.capacity,
-             c.academic_year AS academicYear,
-             c.semester,
-             c.period_id AS periodId,
-             (SELECT COUNT(*) FROM students WHERE class_label = c.class_name) AS studentsCount,
-             (SELECT COUNT(*) FROM class_subjects WHERE class_id = c.id) AS subjectsCount
-      FROM classes c
-      LEFT JOIN teachers t ON c.homeroom_teacher_id = t.id
+             ap.academic_year AS academicYear,
+             ap.semester,
+             clp.period_id AS periodId,
+             (SELECT COUNT(*) FROM student_periods WHERE class_period_id = clp.id) AS studentsCount,
+             (SELECT COUNT(*) FROM class_subjects WHERE class_period_id = clp.id) AS subjectsCount
+      FROM class_periods clp
+      JOIN classes c ON clp.class_id = c.id
+      JOIN academic_periods ap ON clp.period_id = ap.id
+      LEFT JOIN teacher_periods tp ON clp.homeroom_teacher_id = tp.id
+      LEFT JOIN teachers t ON tp.teacher_id = t.id
+      WHERE clp.period_id = ?
+      ORDER BY c.class_name ASC
     `;
-    const params = [];
-    if (periodId && periodId !== "undefined") {
-      query += " WHERE c.period_id = ?";
-      params.push(periodId);
-    }
-    query += " ORDER BY c.class_name ASC";
 
-    const [classes]: any = await db.query(query, params);
+    const [classes]: any = await db.query(query, [activePeriodId]);
     return NextResponse.json({ success: true, data: classes });
   } catch (error: any) {
     console.error("Classes GET Error:", error);
@@ -41,7 +48,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { className, homeroomTeacherId, capacity, academicYear, semester, periodId } = await request.json();
+    const { className, homeroomTeacherId, capacity, periodId } = await request.json();
 
     if (!className) {
       return NextResponse.json(
@@ -50,7 +57,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Ambil period jika tidak dikirim, atau ambil detail periode untuk di-mirror ke academic_year & semester di kelas
     let targetPeriodId = periodId;
     if (!targetPeriodId) {
       const [activePeriod]: any = await db.query(
@@ -59,23 +65,49 @@ export async function POST(request: Request) {
       targetPeriodId = activePeriod[0]?.id || 1;
     }
 
-    const [periodDetails]: any = await db.query(
-      "SELECT academic_year, semester FROM academic_periods WHERE id = ?",
-      [targetPeriodId]
+    // 1. Dapatkan atau buat kelas master
+    let classId: number;
+    const [existingMaster]: any = await db.query(
+      "SELECT id FROM classes WHERE class_name = ?",
+      [className]
     );
-    const resolvedYear = periodDetails[0]?.academic_year || academicYear || "2024/2025";
-    const resolvedSemester = periodDetails[0]?.semester || semester || "Ganjil";
 
-    const [result]: any = await db.query(
-      `INSERT INTO classes (class_name, homeroom_teacher_id, academic_year, semester, capacity, period_id)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [className, homeroomTeacherId || null, resolvedYear, resolvedSemester, capacity || 32, targetPeriodId]
+    if (existingMaster.length > 0) {
+      classId = existingMaster[0].id;
+      // Update capacity
+      await db.query("UPDATE classes SET capacity = ? WHERE id = ?", [capacity || 32, classId]);
+    } else {
+      const [insertRes]: any = await db.query(
+        "INSERT INTO classes (class_name, capacity) VALUES (?, ?)",
+        [className, capacity || 32]
+      );
+      classId = insertRes.insertId;
+    }
+
+    // 2. Tentukan homeroom teacher_period_id
+    let homeroomTeacherPeriodId = null;
+    if (homeroomTeacherId) {
+      const [tpRows]: any = await db.query(
+        "SELECT id FROM teacher_periods WHERE teacher_id = ? AND period_id = ?",
+        [homeroomTeacherId, targetPeriodId]
+      );
+      if (tpRows.length > 0) {
+        homeroomTeacherPeriodId = tpRows[0].id;
+      }
+    }
+
+    // 3. Hubungkan ke periode akademik
+    await db.query(
+      `INSERT INTO class_periods (class_id, period_id, homeroom_teacher_id)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE homeroom_teacher_id = ?`,
+      [classId, targetPeriodId, homeroomTeacherPeriodId, homeroomTeacherPeriodId]
     );
 
     return NextResponse.json({
       success: true,
       message: "Kelas berhasil ditambahkan",
-      id: result.insertId,
+      id: classId,
     });
   } catch (error: any) {
     console.error("Classes POST Error:", error);
