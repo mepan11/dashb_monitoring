@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/Button";
 export default function RegisterNewAccountPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
   
   const [formData, setFormData] = useState({
     fullName: "",
@@ -17,10 +19,43 @@ export default function RegisterNewAccountPage() {
     password: "",
   });
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Akun baru berhasil didaftarkan!");
-    router.push("/dashboard/kelola-akun");
+    setErrorMsg("");
+    setLoading(true);
+
+    // Map UI role values to database role values
+    let dbRole = formData.role;
+    if (formData.role === "guru") dbRole = "teacher";
+    else if (formData.role === "wali") dbRole = "parent";
+
+    try {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fullName: formData.fullName,
+          email: formData.email,
+          role: dbRole,
+          password: formData.password,
+        }),
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        alert("Akun baru berhasil didaftarkan!");
+        router.push("/dashboard/kelola-akun");
+      } else {
+        setErrorMsg(result.message || "Gagal mendaftarkan akun baru");
+      }
+    } catch (error) {
+      console.error("Error registering user:", error);
+      setErrorMsg("Terjadi kesalahan koneksi ke server");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -37,6 +72,12 @@ export default function RegisterNewAccountPage() {
       {/* Main Form container */}
       <form onSubmit={handleSave} className="bg-white border border-slate-100 rounded-3xl p-8 shadow-[0_4px_30px_rgb(0,0,0,0.02)] flex flex-col gap-8">
         
+        {errorMsg && (
+          <div className="bg-rose-50 border border-rose-100 text-rose-600 text-xs font-bold px-4 py-3 rounded-xl">
+            {errorMsg}
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row gap-8 items-start">
           
           {/* Left Column: Avatar upload */}
@@ -145,7 +186,7 @@ export default function RegisterNewAccountPage() {
                 <Info className="w-3.5 h-3.5" />
               </div>
               <p className="text-[10px] text-slate-600 font-bold leading-normal">
-                Password awal akan dikirimkan ke email yang didaftarkan. Pengguna wajib mengganti password saat pertama kali login untuk keamanan akun.
+                Password awal akan digunakan untuk login pertama kali. Pengguna wajib mengganti password saat pertama kali login untuk keamanan akun.
               </p>
             </div>
 
@@ -156,15 +197,16 @@ export default function RegisterNewAccountPage() {
         {/* Buttons footer */}
         <div className="border-t border-slate-100 pt-6 flex items-center justify-end gap-3">
           <Link href="/dashboard/kelola-akun">
-            <Button variant="secondary" className="!py-2.5 !px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold rounded-lg">
+            <Button variant="secondary" className="!py-2.5 !px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold rounded-lg" disabled={loading}>
               Batalkan
             </Button>
           </Link>
           <button
             type="submit"
-            className="py-2.5 px-6 rounded-lg bg-[#2563eb] text-white hover:bg-blue-700 text-xs font-bold flex items-center justify-center shadow-sm transition-all"
+            disabled={loading}
+            className="py-2.5 px-6 rounded-lg bg-[#2563eb] text-white hover:bg-blue-700 text-xs font-bold flex items-center justify-center shadow-sm transition-all disabled:bg-slate-400"
           >
-            Simpan Akun
+            {loading ? "Menyimpan..." : "Simpan Akun"}
           </button>
         </div>
 
