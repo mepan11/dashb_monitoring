@@ -21,6 +21,7 @@ import {
   Activity
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 
 // PDF printing dependencies
 import jsPDF from "jspdf";
@@ -36,6 +37,7 @@ interface RecentAttendance {
 }
 
 export default function AbsensiPage() {
+  const { role, isReadOnly } = useRole();
   // Navigation Tabs
   const [activeTab, setActiveTab] = useState<"monitoring" | "presensi" | "riwayat">("monitoring");
   const [periodId, setPeriodId] = useState<string>("");
@@ -173,7 +175,15 @@ export default function AbsensiPage() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const res = await fetch(`/api/absensi/stats?period_id=${periodId}`);
+        const userStr = localStorage.getItem("user");
+        let teacherEmailParam = "";
+        if (userStr) {
+          const u = JSON.parse(userStr);
+          if (u.role === "guru" && u.email) {
+            teacherEmailParam = `&teacher_email=${encodeURIComponent(u.email)}`;
+          }
+        }
+        const res = await fetch(`/api/absensi/stats?period_id=${periodId}${teacherEmailParam}`);
         const data = await res.json();
         if (data.success) {
           setTeacherRate(data.data.rates.teacher);
@@ -189,7 +199,7 @@ export default function AbsensiPage() {
       }
     }
     fetchStats();
-  }, [activeTab, periodId]);
+  }, [activeTab, periodId, role]);
 
   // Fetch Master Data (Classes and Extracurriculars)
   useEffect(() => {
@@ -888,7 +898,7 @@ export default function AbsensiPage() {
       {activeTab === "monitoring" && (
         <>
           {/* KPI Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${role === "guru" ? "lg:grid-cols-2" : "lg:grid-cols-4"} gap-6`}>
             {/* Presensi Guru */}
             <Link href="/dashboard/absensi/guru" className="block hover:opacity-95 transition-all">
               <div className="bg-white border border-slate-100 p-6 rounded-2xl flex flex-col gap-4 shadow-[0_4px_20px_rgb(0,0,0,0.02)] h-full">
@@ -909,22 +919,24 @@ export default function AbsensiPage() {
             </Link>
 
             {/* Presensi Coach */}
-            <Link href="/dashboard/absensi/coach" className="block hover:opacity-95 transition-all">
-              <div className="bg-white border border-slate-100 p-6 rounded-2xl flex flex-col gap-4 shadow-[0_4px_20px_rgb(0,0,0,0.02)] h-full">
-                <div className="flex justify-between items-start">
-                  <div className="p-3 rounded-lg bg-emerald-50 text-[#10b981]">
-                    <Users className="w-5 h-5" />
+            {role !== "guru" && (
+              <Link href="/dashboard/absensi/coach" className="block hover:opacity-95 transition-all">
+                <div className="bg-white border border-slate-100 p-6 rounded-2xl flex flex-col gap-4 shadow-[0_4px_20px_rgb(0,0,0,0.02)] h-full">
+                  <div className="flex justify-between items-start">
+                    <div className="p-3 rounded-lg bg-emerald-50 text-[#10b981]">
+                      <Users className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-semibold text-slate-400">Presensi Coach</span>
+                    <span className="text-3xl font-extrabold text-slate-800 mt-2">{coachRate}</span>
+                    <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 mt-3">
+                      <span>— Stabil dalam 7 hari</span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-slate-400">Presensi Coach</span>
-                  <span className="text-3xl font-extrabold text-slate-800 mt-2">{coachRate}</span>
-                  <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 mt-3">
-                    <span>— Stabil dalam 7 hari</span>
-                  </div>
-                </div>
-              </div>
-            </Link>
+              </Link>
+            )}
 
             {/* Presensi Siswa */}
             <Link href="/dashboard/absensi/siswa" className="block hover:opacity-95 transition-all">
@@ -946,22 +958,24 @@ export default function AbsensiPage() {
             </Link>
 
             {/* Presensi Ekskul */}
-            <Link href="/dashboard/absensi/ekskul" className="block hover:opacity-95 transition-all">
-              <div className="bg-white border border-slate-100 p-6 rounded-2xl flex flex-col gap-4 shadow-[0_4px_20px_rgb(0,0,0,0.02)] h-full">
-                <div className="flex justify-between items-start">
-                  <div className="p-3 rounded-lg bg-purple-50 text-purple-600">
-                    <Activity className="w-5 h-5" />
+            {role !== "guru" && (
+              <Link href="/dashboard/absensi/ekskul" className="block hover:opacity-95 transition-all">
+                <div className="bg-white border border-slate-100 p-6 rounded-2xl flex flex-col gap-4 shadow-[0_4px_20px_rgb(0,0,0,0.02)] h-full">
+                  <div className="flex justify-between items-start">
+                    <div className="p-3 rounded-lg bg-purple-50 text-purple-600">
+                      <Activity className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-semibold text-slate-400">Presensi Ekskul</span>
+                    <span className="text-3xl font-extrabold text-slate-800 mt-2">{ekskulRate}</span>
+                    <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 mt-3">
+                      <span>— Stabil dalam 7 hari</span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-slate-400">Presensi Ekskul</span>
-                  <span className="text-3xl font-extrabold text-slate-800 mt-2">{ekskulRate}</span>
-                  <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 mt-3">
-                    <span>— Stabil dalam 7 hari</span>
-                  </div>
-                </div>
-              </div>
-            </Link>
+              </Link>
+            )}
           </div>
 
           {/* Monthly Attendance Trend Card */}
@@ -1598,7 +1612,7 @@ export default function AbsensiPage() {
             )}
 
             {/* Save Button for Forms */}
-            {((presensiType === "siswa" && selectedClassId && students.length > 0) ||
+            {!isReadOnly && ((presensiType === "siswa" && selectedClassId && students.length > 0) ||
               (presensiType === "guru" && teachersList.length > 0) ||
               (presensiType === "coach" && coachesList.length > 0) ||
               (presensiType === "ekskul" && selectedEkskulId && ekskulStudents.length > 0)) && (

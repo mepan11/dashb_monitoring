@@ -31,30 +31,45 @@ export async function GET(
       );
     }
 
-    // Dapatkan class_period_id
+    // Dapatkan class_period_id dan email wali kelas
     const [classPeriodRows]: any = await db.query(
-      "SELECT id FROM class_periods WHERE class_id = ? AND period_id = ?",
+      `SELECT clp.id, t.email AS homeroomTeacherEmail 
+       FROM class_periods clp
+       LEFT JOIN teacher_periods tp ON clp.homeroom_teacher_id = tp.id
+       LEFT JOIN teachers t ON tp.teacher_id = t.id
+       WHERE clp.class_id = ? AND clp.period_id = ?`,
       [classId, activePeriodId]
     );
     const classPeriodId = classPeriodRows[0]?.id;
+    const homeroomTeacherEmail = classPeriodRows[0]?.homeroomTeacherEmail;
+
     if (!classPeriodId) {
-      return NextResponse.json({ success: true, data: [] });
+      return NextResponse.json({ success: true, data: [], isHomeroomClass: false });
     }
 
+    const teacherEmail = url.searchParams.get("teacher_email");
+    const isHomeroomClass = teacherEmail ? homeroomTeacherEmail === teacherEmail : false;
+
     // Ambil mata pelajaran di kelas ini pada periode aktif
-    const [subjects]: any = await db.query(
-      `SELECT cs.id AS classSubjectId, sp.subject_id AS subjectId, tp.teacher_id AS teacherId,
+    // Jika user adalah guru dan bukan wali kelas, hanya ambil mata pelajaran yang dia ajar
+    let q = `SELECT cs.id AS classSubjectId, sp.subject_id AS subjectId, tp.teacher_id AS teacherId,
               s.name AS subjectName, s.code AS subjectCode,
-              t.name AS teacherName,
+              t.name AS teacherName, t.email AS teacherEmail,
               cs.schedule_day AS scheduleDay, cs.start_time AS startTime, cs.end_time AS endTime
        FROM class_subjects cs
        JOIN subject_periods sp ON cs.subject_period_id = sp.id
        JOIN subjects s ON sp.subject_id = s.id
        LEFT JOIN teacher_periods tp ON cs.teacher_period_id = tp.id
        LEFT JOIN teachers t ON tp.teacher_id = t.id
-       WHERE cs.class_period_id = ?`,
-      [classPeriodId]
-    );
+       WHERE cs.class_period_id = ?`;
+    const qParams = [classPeriodId];
+
+    if (teacherEmail && !isHomeroomClass) {
+      q += ` AND t.email = ?`;
+      qParams.push(teacherEmail);
+    }
+
+    const [subjects]: any = await db.query(q, qParams);
 
     // Formulasi output bersih
     const formattedSubjects = subjects.map((subj: any) => {
@@ -91,6 +106,7 @@ export async function GET(
         category: subj.subjectCode?.includes("BING") || subj.subjectCode?.includes("MAT") || subj.subjectCode?.includes("IPA") ? "AKADEMIK" : "NON-AKADEMIK",
         teacherId: subj.teacherId,
         teacher: subj.teacherName || "Belum ditugaskan",
+        teacherEmail: subj.teacherEmail || "",
         teacherInitials: initials,
         schedule: scheduleText,
         scheduleDays: days,
@@ -109,6 +125,7 @@ export async function GET(
       success: true,
       className: classRows[0].className,
       academicYear: periodRows[0]?.academic_year || "—",
+      isHomeroomClass,
       data: formattedSubjects,
     });
   } catch (error: any) {

@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 
 interface ClassItem {
   id: string;
@@ -21,9 +22,12 @@ interface ClassItem {
   academicYear: string;
   semester: string;
   studentsCount: number;
+  isHomeroom?: number;
+  isSubjectTeacher?: number;
 }
 
 export default function KelasPage() {
+  const { isReadOnly } = useRole();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedGradeFilter, setSelectedGradeFilter] = useState("Semua Kelas");
@@ -58,7 +62,15 @@ export default function KelasPage() {
     if (!pid) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/classes?period_id=${pid}`);
+      const userStr = localStorage.getItem("user");
+      let teacherEmailParam = "";
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.role === "guru" && u.email) {
+          teacherEmailParam = `&teacher_email=${encodeURIComponent(u.email)}`;
+        }
+      }
+      const res = await fetch(`/api/classes?period_id=${pid}${teacherEmailParam}`);
       const json = await res.json();
       if (json.success) {
         setClasses(json.data);
@@ -111,14 +123,16 @@ export default function KelasPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <Link href="/dashboard/kelas/tambah">
-            <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]">
-              <Plus className="w-4 h-4" />
-              Tambah Kelas Baru
-            </Button>
-          </Link>
-        </div>
+        {!isReadOnly && (
+          <div className="flex flex-wrap items-center gap-3">
+            <Link href="/dashboard/kelas/tambah">
+              <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]">
+                <Plus className="w-4 h-4" />
+                Tambah Kelas Baru
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* KPI Cards Grid */}
@@ -216,12 +230,24 @@ export default function KelasPage() {
               >
                 {/* Card Top */}
                 <div className="flex justify-between items-center">
-                  <span className="font-extrabold text-slate-700 text-base">{cls.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-slate-700 text-base">{cls.name}</span>
+                    {cls.isHomeroom === 1 && (
+                      <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 shadow-sm shrink-0">
+                        Wali Kelas
+                      </span>
+                    )}
+                    {cls.isSubjectTeacher === 1 && (
+                      <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100 shadow-sm shrink-0">
+                        Pengajar
+                      </span>
+                    )}
+                  </div>
                   <span
                     className={`text-[10px] font-extrabold px-2 py-0.5 rounded ${
                       isFull
                         ? "bg-orange-50 text-orange-500"
-                        : "bg-emerald-50 text-emerald-505"
+                        : "bg-emerald-50 text-emerald-600"
                     }`}
                   >
                     {isFull ? "PENUH" : "AKTIF"}
@@ -264,19 +290,21 @@ export default function KelasPage() {
                       Detail Kelas
                     </span>
                   </Link>
-                  <div className="flex items-center gap-2">
-                    <Link href={`/dashboard/kelas/edit?id=${cls.id}`}>
-                      <span className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg border border-slate-100 transition-all block cursor-pointer">
-                        <Pencil className="w-4 h-4" />
-                      </span>
-                    </Link>
-                    <button
-                      onClick={() => handleDelete(cls.id, cls.name)}
-                      className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg border border-slate-100 transition-all"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-500" />
-                    </button>
-                  </div>
+                  {!isReadOnly && (
+                    <div className="flex items-center gap-2">
+                      <Link href={`/dashboard/kelas/edit?id=${cls.id}`}>
+                        <span className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg border border-slate-100 transition-all block cursor-pointer">
+                          <Pencil className="w-4 h-4" />
+                        </span>
+                      </Link>
+                      <button
+                        onClick={() => handleDelete(cls.id, cls.name)}
+                        className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg border border-slate-100 transition-all"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );

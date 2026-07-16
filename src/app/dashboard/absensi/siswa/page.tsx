@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
@@ -17,6 +17,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -29,6 +30,7 @@ interface StudentRow {
 }
 
 export default function StudentAttendanceSubpage() {
+  const { role } = useRole();
   const [periodId, setPeriodId] = useState("");
   const [periodName, setPeriodName] = useState("");
   const [classes, setClasses] = useState<any[]>([]);
@@ -99,13 +101,21 @@ export default function StudentAttendanceSubpage() {
   // Fetch Classes
   useEffect(() => {
     if (!periodId) return;
-    fetch(`/api/classes?period_id=${periodId}`)
+    const userStr = localStorage.getItem("user");
+    let teacherEmailParam = "";
+    if (userStr) {
+      const u = JSON.parse(userStr);
+      if (u.role === "guru" && u.email) {
+        teacherEmailParam = `&teacher_email=${encodeURIComponent(u.email)}`;
+      }
+    }
+    fetch(`/api/classes?period_id=${periodId}${teacherEmailParam}`)
       .then((r) => r.json())
       .then((json) => {
         if (json.success) setClasses(json.data);
       })
       .catch((err) => console.error("Error fetching classes:", err));
-  }, [periodId]);
+  }, [periodId, role]);
 
   // Fetch Subjects when selectedClassId changes
   useEffect(() => {
@@ -114,7 +124,15 @@ export default function StudentAttendanceSubpage() {
       setSelectedSubjectId("");
       return;
     }
-    fetch(`/api/classes/${selectedClassId}/subjects?period_id=${periodId}`)
+    const userStr = localStorage.getItem("user");
+    let teacherEmailParam = "";
+    if (userStr) {
+      const u = JSON.parse(userStr);
+      if (u.role === "guru" && u.email) {
+        teacherEmailParam = `&teacher_email=${encodeURIComponent(u.email)}`;
+      }
+    }
+    fetch(`/api/classes/${selectedClassId}/subjects?period_id=${periodId}${teacherEmailParam}`)
       .then((r) => r.json())
       .then((json) => {
         if (json.success) {
@@ -123,7 +141,7 @@ export default function StudentAttendanceSubpage() {
         }
       })
       .catch((err) => console.error("Error fetching subjects:", err));
-  }, [selectedClassId, periodId]);
+  }, [selectedClassId, periodId, role]);
 
   // Fetch Students & existing attendance
   const fetchStudents = useCallback(async () => {

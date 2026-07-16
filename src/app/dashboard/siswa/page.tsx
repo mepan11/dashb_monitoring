@@ -13,6 +13,7 @@ import {
   Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 
 interface Student {
   id: string;
@@ -35,6 +36,8 @@ interface Stats {
 const LIMIT = 15;
 
 export default function SiswaPage() {
+  const { role } = useRole();
+  const isReadOnly = role !== "admin";
   const [students, setStudents] = useState<Student[]>([]);
   const [stats, setStats] = useState<Stats>({ total: 0, active: 0, male: 0, female: 0 });
   const [filteredTotal, setFilteredTotal] = useState(0);
@@ -150,12 +153,14 @@ export default function SiswaPage() {
           </div>
         </div>
 
-        <Link href="/dashboard/siswa/tambah">
-          <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]">
-            <UserPlus className="w-4 h-4" />
-            Tambah Siswa
-          </Button>
-        </Link>
+        {!isReadOnly && (
+          <Link href="/dashboard/siswa/tambah">
+            <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]">
+              <UserPlus className="w-4 h-4" />
+              Tambah Siswa
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Stats + Filter Row */}
@@ -341,18 +346,22 @@ export default function SiswaPage() {
                         >
                           <Eye className="w-4 h-4" />
                         </Link>
-                        <Link
-                          href={`/dashboard/siswa/edit?id=${student.id}`}
-                          className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Link>
-                        <button
-                          onClick={() => handleDelete(student.id, student.name)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {!isReadOnly && (
+                          <>
+                            <Link
+                              href={`/dashboard/siswa/edit?id=${student.id}`}
+                              className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Link>
+                            <button
+                              onClick={() => handleDelete(student.id, student.name)}
+                              className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
 

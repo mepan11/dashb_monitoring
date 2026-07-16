@@ -17,6 +17,7 @@ import {
   Trash2,
   Pencil,
 } from "lucide-react";
+import { useRole } from "@/lib/useRole";
 
 interface ProgramItem {
   id: string;
@@ -36,6 +37,7 @@ interface CoachOption {
 }
 
 export default function EkstrakurikulerPage() {
+  const { isReadOnly } = useRole();
   const [selectedFilter, setSelectedFilter] = useState("Semua");
   const [programs, setPrograms] = useState<ProgramItem[]>([]);
   const [coaches, setCoaches] = useState<CoachOption[]>([]);
@@ -294,20 +296,22 @@ export default function EkstrakurikulerPage() {
                     <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-md ${getCategoryBadgeStyles(prog.category)}`}>
                       {prog.category}
                     </span>
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
-                      <button
-                        onClick={() => handleOpenEditModal(prog)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-all"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteEkskul(prog.id, prog.name)}
-                        className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {!isReadOnly && (
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+                        <button
+                          onClick={() => handleOpenEditModal(prog)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-all"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteEkskul(prog.id, prog.name)}
+                          className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -349,18 +353,20 @@ export default function EkstrakurikulerPage() {
         )}
 
         {/* Add Program Dotted Card */}
-        <div
-          onClick={handleOpenAddModal}
-          className="bg-[#f4f7fc]/50 border-2 border-dashed border-slate-200/80 rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-4 cursor-pointer hover:bg-[#2563eb]/5 hover:border-blue-300 transition-all min-h-[220px]"
-        >
-          <div className="w-11 h-11 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-[#2563eb] shadow-sm">
-            <Plus className="w-5 h-5 stroke-[2.5]" />
+        {!isReadOnly && (
+          <div
+            onClick={handleOpenAddModal}
+            className="bg-[#f4f7fc]/50 border-2 border-dashed border-slate-200/80 rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-4 cursor-pointer hover:bg-[#2563eb]/5 hover:border-blue-300 transition-all min-h-[220px]"
+          >
+            <div className="w-11 h-11 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-[#2563eb] shadow-sm">
+              <Plus className="w-5 h-5 stroke-[2.5]" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-extrabold text-slate-700">Tambah Program</span>
+              <span className="text-xs text-slate-400 font-medium mt-1">Buat kurikulum ekstrakurikuler baru</span>
+            </div>
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-extrabold text-slate-700">Tambah Program</span>
-            <span className="text-xs text-slate-400 font-medium mt-1">Buat kurikulum ekstrakurikuler baru</span>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Bottom section summary cards (3 columns) */}

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { SlidersHorizontal, Calendar, Layers, Users } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 
 interface GradeClassCard {
   id: string;
@@ -16,6 +17,7 @@ interface GradeClassCard {
 }
 
 export default function NilaiPage() {
+  const { role } = useRole();
   const [classes, setClasses] = useState<GradeClassCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodId, setPeriodId] = useState<string>("");
@@ -40,8 +42,15 @@ export default function NilaiPage() {
     async function fetchClasses() {
       try {
         setLoading(true);
-        // Load classes
-        const res = await fetch("/api/classes");
+        const userStr = localStorage.getItem("user");
+        let teacherEmailParam = "";
+        if (userStr) {
+          const u = JSON.parse(userStr);
+          if (u.role === "guru" && u.email) {
+            teacherEmailParam = `&teacher_email=${encodeURIComponent(u.email)}`;
+          }
+        }
+        const res = await fetch(`/api/classes?period_id=${periodId}${teacherEmailParam}`);
         const json = await res.json();
         
         if (json.success) {

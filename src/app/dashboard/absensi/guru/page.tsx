@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
@@ -15,6 +15,7 @@ import {
   Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -46,6 +47,7 @@ function formatFromDatetimeLocal(val: string) {
 }
 
 export default function TeacherAttendancePage() {
+  const { role } = useRole();
   const [periodId, setPeriodId] = useState("");
   const [periodName, setPeriodName] = useState("");
   const [teachers, setTeachers] = useState<TeacherRow[]>([]);
@@ -114,8 +116,16 @@ export default function TeacherAttendancePage() {
     if (!periodId) return;
     setLoading(true);
     try {
+      const userStr = localStorage.getItem("user");
+      let teacherEmailParam = "";
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.role === "guru" && u.email) {
+          teacherEmailParam = `&teacher_email=${encodeURIComponent(u.email)}`;
+        }
+      }
       const res = await fetch(
-        `/api/absensi?type=guru&date=${selectedDate}&period_id=${periodId}`
+        `/api/absensi?type=guru&date=${selectedDate}&period_id=${periodId}${teacherEmailParam}`
       );
       const json = await res.json();
       if (json.success) {
@@ -189,6 +199,13 @@ export default function TeacherAttendancePage() {
         startDate,
         endDate
       });
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.role === "guru" && u.email) {
+          queryParams.append("teacher_email", u.email);
+        }
+      }
       if (periodId) {
         queryParams.append("period_id", periodId);
       }

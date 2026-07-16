@@ -14,6 +14,7 @@ import {
   CalendarDays
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 
 interface PeriodItem {
   id: number;
@@ -24,6 +25,8 @@ interface PeriodItem {
 }
 
 export default function PeriodeAkademikPage() {
+  const { role } = useRole();
+  const isReadOnly = role !== "admin";
   const [periods, setPeriods] = useState<PeriodItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -209,15 +212,17 @@ export default function PeriodeAkademikPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            onClick={handleOpenAdd}
-            className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]"
-          >
-            <Plus className="w-4 h-4" />
-            Tambah Periode Baru
-          </Button>
-        </div>
+        {!isReadOnly && (
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              onClick={handleOpenAdd}
+              className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]"
+            >
+              <Plus className="w-4 h-4" />
+              Tambah Periode Baru
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Main layout */}
@@ -241,7 +246,9 @@ export default function PeriodeAkademikPage() {
                     <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider">Tahun Ajaran</th>
                     <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Semester</th>
                     <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Status</th>
-                    <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Aksi</th>
+                    {!isReadOnly && (
+                      <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Aksi</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -269,37 +276,39 @@ export default function PeriodeAkademikPage() {
                           </span>
                         )}
                       </td>
-                      <td className="py-4 px-6 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          {period.isActive !== 1 && (
+                      {!isReadOnly && (
+                        <td className="py-4 px-6 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            {period.isActive !== 1 && (
+                              <button
+                                onClick={() => handleSetActive(period)}
+                                className="px-2.5 py-1 text-[10px] font-bold bg-emerald-50 text-emerald-600 rounded border border-emerald-100 hover:bg-emerald-100 transition-all"
+                              >
+                                Aktifkan
+                              </button>
+                            )}
                             <button
-                              onClick={() => handleSetActive(period)}
-                              className="px-2.5 py-1 text-[10px] font-bold bg-emerald-50 text-emerald-600 rounded border border-emerald-100 hover:bg-emerald-100 transition-all"
+                              onClick={() => handleOpenEdit(period)}
+                              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                              title="Edit Periode"
                             >
-                              Aktifkan
+                              <Pencil className="w-4 h-4" />
                             </button>
-                          )}
-                          <button
-                            onClick={() => handleOpenEdit(period)}
-                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                            title="Edit Periode"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(period)}
-                            disabled={period.isActive === 1}
-                            className={`p-2 rounded-lg transition-all ${
-                              period.isActive === 1
-                                ? "text-slate-200 cursor-not-allowed"
-                                : "text-slate-400 hover:text-red-600 hover:bg-red-50"
-                            }`}
-                            title="Hapus Periode"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
+                            <button
+                              onClick={() => handleDelete(period)}
+                              disabled={period.isActive === 1}
+                              className={`p-2 rounded-lg transition-all ${
+                                period.isActive === 1
+                                  ? "text-slate-200 cursor-not-allowed"
+                                  : "text-slate-400 hover:text-red-600 hover:bg-red-50"
+                              }`}
+                              title="Hapus Periode"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

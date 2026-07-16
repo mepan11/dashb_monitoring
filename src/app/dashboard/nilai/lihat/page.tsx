@@ -16,6 +16,7 @@ import {
   Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -50,6 +51,7 @@ interface Stats {
 }
 
 function ViewGradesContent() {
+  const { role, isReadOnly } = useRole();
   const router = useRouter();
   const searchParams = useSearchParams();
   const classId = searchParams.get("class_id");
@@ -69,6 +71,16 @@ function ViewGradesContent() {
   // Subjects states
   const [subjects, setSubjects] = useState<any[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
+  const [isHomeroomClass, setIsHomeroomClass] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState("");
+
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      const u = JSON.parse(userStr);
+      if (u.email) setCurrentUserEmail(u.email);
+    }
+  }, []);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -106,14 +118,24 @@ function ViewGradesContent() {
     if (!classId || !periodId) {
       setSubjects([]);
       setSelectedSubjectId("");
+      setIsHomeroomClass(false);
       return;
     }
     async function fetchSubjects() {
       try {
-        const res = await fetch(`/api/classes/${classId}/subjects?period_id=${periodId}`);
+        const userStr = localStorage.getItem("user");
+        let teacherEmailParam = "";
+        if (userStr) {
+          const u = JSON.parse(userStr);
+          if (u.role === "guru" && u.email) {
+            teacherEmailParam = `&teacher_email=${encodeURIComponent(u.email)}`;
+          }
+        }
+        const res = await fetch(`/api/classes/${classId}/subjects?period_id=${periodId}${teacherEmailParam}`);
         const json = await res.json();
         if (json.success) {
           setSubjects(json.data);
+          setIsHomeroomClass(!!json.isHomeroomClass);
           if (json.data.length > 0) {
             setSelectedSubjectId(String(json.data[0].id));
           } else {
@@ -125,7 +147,7 @@ function ViewGradesContent() {
       }
     }
     fetchSubjects();
-  }, [classId, periodId]);
+  }, [classId, periodId, role]);
 
   // Fetch assignments when selectedSubjectId or subjects changes
   useEffect(() => {
@@ -362,6 +384,9 @@ function ViewGradesContent() {
     s.nisn.includes(searchQuery)
   );
 
+  const subjectObj = subjects.find(s => String(s.id) === String(selectedSubjectId));
+  const canEdit = !isReadOnly && (role !== "guru" || (subjectObj && subjectObj.teacherEmail === currentUserEmail));
+
   const statsConfig = [
     {
       title: "Tahun Akademik",
@@ -506,7 +531,7 @@ function ViewGradesContent() {
                   <th className="py-4 px-6 text-center">Nilai Rapor</th>
                   <th className="py-4 px-6 text-center">Kehadiran</th>
                   <th className="py-4 px-6 text-center">Status</th>
-                  <th className="py-4 px-6 text-center">Aksi</th>
+                  {canEdit && <th className="py-4 px-6 text-center">Aksi</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-semibold">
@@ -573,22 +598,24 @@ function ViewGradesContent() {
                     </td>
 
                     {/* Action buttons */}
-                    <td className="py-4 px-6 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => handleOpenEditModal(row, "daily")}
-                          className="flex items-center gap-1.5 py-1 px-2 text-xs bg-blue-50 text-[#2563eb] rounded-lg font-bold hover:bg-blue-100/60 transition-all"
-                        >
-                          <Plus className="w-3 h-3" /> Tugas
-                        </button>
-                        <button
-                          onClick={() => handleOpenEditModal(row, "term")}
-                          className="flex items-center gap-1.5 py-1 px-2 text-xs bg-emerald-50 text-emerald-600 rounded-lg font-bold hover:bg-emerald-100/60 transition-all"
-                        >
-                          <Edit className="w-3.5 h-3.5" /> UTS/UAS
-                        </button>
-                      </div>
-                    </td>
+                    {canEdit && (
+                      <td className="py-4 px-6 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenEditModal(row, "daily")}
+                            className="flex items-center gap-1.5 py-1 px-2 text-xs bg-blue-50 text-[#2563eb] rounded-lg font-bold hover:bg-blue-100/60 transition-all"
+                          >
+                            <Plus className="w-3 h-3" /> Tugas
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditModal(row, "term")}
+                            className="flex items-center gap-1.5 py-1 px-2 text-xs bg-emerald-50 text-emerald-600 rounded-lg font-bold hover:bg-emerald-100/60 transition-all"
+                          >
+                            <Edit className="w-3.5 h-3.5" /> UTS/UAS
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { StatCard } from "@/components/ui/StatCard";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 
 interface AccountUser {
   id: string;
@@ -33,6 +34,7 @@ interface StatsData {
 }
 
 export default function KelolaAkunPage() {
+  const { role } = useRole();
   const [accounts, setAccounts] = useState<AccountUser[]>([]);
   const [stats, setStats] = useState<StatsData>({
     total: 0,
@@ -96,6 +98,15 @@ export default function KelolaAkunPage() {
         return "bg-slate-100 text-slate-600";
     }
   };
+
+  if (role === "guru" || role === "coach") {
+    return (
+      <div className="py-20 text-center text-slate-400 font-bold">
+        <Ban className="w-12 h-12 text-rose-500 mx-auto mb-4" />
+        Anda tidak memiliki akses ke halaman ini.
+      </div>
+    );
+  }
 
   const statsConfig = [
     {

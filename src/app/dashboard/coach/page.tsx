@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { StatCard } from "@/components/ui/StatCard";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 
 interface Coach {
   id: string;
@@ -34,6 +35,7 @@ interface Coach {
 }
 
 export default function CoachPage() {
+  const { isReadOnly } = useRole();
   const [selectedBidang, setSelectedBidang] = useState("Semua Bidang");
   const [selectedStatus, setSelectedStatus] = useState("Status: Semua");
   const [searchQuery, setSearchQuery] = useState("");
@@ -228,23 +230,25 @@ export default function CoachPage() {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-3 w-full md:w-auto self-stretch md:self-auto">
-          <Button
-            onClick={handleCopyPrevious}
-            disabled={copying}
-            className="!w-auto !py-2.5 !px-5 bg-white border border-slate-200 !text-black hover:bg-slate-50 hover:text-slate-900 text-xs font-semibold rounded-lg flex items-center gap-2 shadow-sm disabled:opacity-50"
-          >
-            <Copy className="w-4 h-4" />
-            {copying ? "Menyalin..." : "Salin Data Coach Periode Sebelumnya"}
-          </Button>
-
-          <Link href="/dashboard/coach/tambah" className="flex-1 md:flex-initial">
-            <Button className="!w-full md:!w-auto !py-2.5 !px-5 flex items-center justify-center gap-2 rounded-lg font-semibold text-xs shadow-sm bg-blue-600 hover:bg-blue-700 text-white">
-              <Plus className="w-4 h-4" />
-              Tambah Coach Baru
+        {!isReadOnly && (
+          <div className="flex items-center gap-3 w-full md:w-auto self-stretch md:self-auto">
+            <Button
+              onClick={handleCopyPrevious}
+              disabled={copying}
+              className="!w-auto !py-2.5 !px-5 bg-white border border-slate-200 !text-black hover:bg-slate-50 hover:text-slate-900 text-xs font-semibold rounded-lg flex items-center gap-2 shadow-sm disabled:opacity-50"
+            >
+              <Copy className="w-4 h-4" />
+              {copying ? "Menyalin..." : "Salin Data Coach Periode Sebelumnya"}
             </Button>
-          </Link>
-        </div>
+
+            <Link href="/dashboard/coach/tambah" className="flex-1 md:flex-initial">
+              <Button className="!w-full md:!w-auto !py-2.5 !px-5 flex items-center justify-center gap-2 rounded-lg font-semibold text-xs shadow-sm bg-blue-600 hover:bg-blue-700 text-white">
+                <Plus className="w-4 h-4" />
+                Tambah Coach Baru
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* KPI Cards Grid */}
@@ -416,15 +420,19 @@ export default function CoachPage() {
                         <Link href={`/dashboard/coach/profile?id=${coach.id}`} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition-all">
                           <Eye className="w-4 h-4" />
                         </Link>
-                        <Link href={`/dashboard/coach/edit?id=${coach.id}`} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all">
-                          <Pencil className="w-4 h-4" />
-                        </Link>
-                        <button
-                          onClick={() => handleDelete(coach.id)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {!isReadOnly && (
+                          <>
+                            <Link href={`/dashboard/coach/edit?id=${coach.id}`} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all">
+                              <Pencil className="w-4 h-4" />
+                            </Link>
+                            <button
+                              onClick={() => handleDelete(coach.id)}
+                              className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
 

@@ -14,28 +14,70 @@ export async function GET(request: Request) {
       activePeriodId = activePeriod[0]?.id || 1;
     }
 
-    let query = `
-      SELECT c.id, 
-             c.class_name AS name,
-             c.class_name AS className, 
-             t.name AS homeroomTeacher,
-             tp.teacher_id AS homeroomTeacherId,
-             c.capacity,
-             ap.academic_year AS academicYear,
-             ap.semester,
-             clp.period_id AS periodId,
-             (SELECT COUNT(*) FROM student_periods WHERE class_period_id = clp.id) AS studentsCount,
-             (SELECT COUNT(*) FROM class_subjects WHERE class_period_id = clp.id) AS subjectsCount
-      FROM class_periods clp
-      JOIN classes c ON clp.class_id = c.id
-      JOIN academic_periods ap ON clp.period_id = ap.id
-      LEFT JOIN teacher_periods tp ON clp.homeroom_teacher_id = tp.id
-      LEFT JOIN teachers t ON tp.teacher_id = t.id
-      WHERE clp.period_id = ?
-      ORDER BY c.class_name ASC
-    `;
+    const teacherEmail = url.searchParams.get("teacher_email");
+    let query = "";
+    const queryParams: any[] = [];
 
-    const [classes]: any = await db.query(query, [activePeriodId]);
+    if (teacherEmail) {
+      const [tRows]: any = await db.query(
+        "SELECT id FROM teacher_periods WHERE teacher_id = (SELECT id FROM teachers WHERE email = ? LIMIT 1) AND period_id = ? LIMIT 1",
+        [teacherEmail, activePeriodId]
+      );
+      const teacherPeriodId = tRows[0]?.id || 0;
+
+      query = `
+        SELECT c.id, 
+               c.class_name AS name,
+               c.class_name AS className, 
+               t.name AS homeroomTeacher,
+               tp.teacher_id AS homeroomTeacherId,
+               c.capacity,
+               ap.academic_year AS academicYear,
+               ap.semester,
+               clp.id AS classPeriodId,
+               clp.period_id AS periodId,
+               (SELECT COUNT(*) FROM student_periods WHERE class_period_id = clp.id) AS studentsCount,
+               (SELECT COUNT(*) FROM class_subjects WHERE class_period_id = clp.id) AS subjectsCount,
+               IF(clp.homeroom_teacher_id = ?, 1, 0) AS isHomeroom,
+               IF(clp.id IN (SELECT class_period_id FROM class_subjects WHERE teacher_period_id = ?), 1, 0) AS isSubjectTeacher
+        FROM class_periods clp
+        JOIN classes c ON clp.class_id = c.id
+        JOIN academic_periods ap ON clp.period_id = ap.id
+        LEFT JOIN teacher_periods tp ON clp.homeroom_teacher_id = tp.id
+        LEFT JOIN teachers t ON tp.teacher_id = t.id
+        WHERE clp.period_id = ?
+          AND (clp.homeroom_teacher_id = ? OR clp.id IN (SELECT class_period_id FROM class_subjects WHERE teacher_period_id = ?))
+        ORDER BY c.class_name ASC
+      `;
+      queryParams.push(teacherPeriodId, teacherPeriodId, activePeriodId, teacherPeriodId, teacherPeriodId);
+    } else {
+      query = `
+        SELECT c.id, 
+               c.class_name AS name,
+               c.class_name AS className, 
+               t.name AS homeroomTeacher,
+               tp.teacher_id AS homeroomTeacherId,
+               c.capacity,
+               ap.academic_year AS academicYear,
+               ap.semester,
+               clp.id AS classPeriodId,
+               clp.period_id AS periodId,
+               (SELECT COUNT(*) FROM student_periods WHERE class_period_id = clp.id) AS studentsCount,
+               (SELECT COUNT(*) FROM class_subjects WHERE class_period_id = clp.id) AS subjectsCount,
+               0 AS isHomeroom,
+               0 AS isSubjectTeacher
+        FROM class_periods clp
+        JOIN classes c ON clp.class_id = c.id
+        JOIN academic_periods ap ON clp.period_id = ap.id
+        LEFT JOIN teacher_periods tp ON clp.homeroom_teacher_id = tp.id
+        LEFT JOIN teachers t ON tp.teacher_id = t.id
+        WHERE clp.period_id = ?
+        ORDER BY c.class_name ASC
+      `;
+      queryParams.push(activePeriodId);
+    }
+
+    const [classes]: any = await db.query(query, queryParams);
     return NextResponse.json({ success: true, data: classes });
   } catch (error: any) {
     console.error("Classes GET Error:", error);

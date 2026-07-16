@@ -1,9 +1,10 @@
-﻿"use client";
+"use client";
 
 import React, { Suspense, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, Download, Search, Save, Star } from "lucide-react";
+import { useRole } from "@/lib/useRole";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -26,6 +27,7 @@ interface EkskulInfo {
 }
 
 function NilaiEkskulContent() {
+  const { isReadOnly } = useRole();
   const searchParams = useSearchParams();
   const epId = searchParams.get("ep_id") || "";
 
@@ -262,7 +264,7 @@ function NilaiEkskulContent() {
                   <th className="py-4 px-5 text-center">Gender</th>
                   <th className="py-4 px-5 text-center w-32">Nilai Ekskul</th>
                   <th className="py-4 px-5">Catatan</th>
-                  <th className="py-4 px-5 text-center">Aksi</th>
+                  {!isReadOnly && <th className="py-4 px-5 text-center">Aksi</th>}
                 </tr>
               </thead>
               <tbody>
@@ -293,54 +295,64 @@ function NilaiEkskulContent() {
 
                       {/* Nilai Input */}
                       <td className="py-4 px-5 text-center">
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step={0.5}
-                          placeholder="0-100"
-                          value={edit.score}
-                          onChange={(e) =>
-                            setEdits((prev) => ({
-                              ...prev,
-                              [key]: { ...prev[key], score: e.target.value },
-                            }))
-                          }
-                          className="w-24 px-3 py-2 text-center border border-slate-200 rounded-lg text-xs font-bold text-slate-700 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                        {isReadOnly ? (
+                          <span className="font-bold text-slate-700">{edit.score || "—"}</span>
+                        ) : (
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={0.5}
+                            placeholder="0-100"
+                            value={edit.score}
+                            onChange={(e) =>
+                              setEdits((prev) => ({
+                                ...prev,
+                                [key]: { ...prev[key], score: e.target.value },
+                              }))
+                            }
+                            className="w-24 px-3 py-2 text-center border border-slate-200 rounded-lg text-xs font-bold text-slate-700 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        )}
                       </td>
 
                       {/* Catatan Input */}
                       <td className="py-4 px-5">
-                        <input
-                          type="text"
-                          placeholder="Catatan..."
-                          value={edit.notes}
-                          onChange={(e) =>
-                            setEdits((prev) => ({
-                              ...prev,
-                              [key]: { ...prev[key], notes: e.target.value },
-                            }))
-                          }
-                          className="w-full min-w-[120px] px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                        {isReadOnly ? (
+                          <span className="text-slate-500 font-medium">{edit.notes || "—"}</span>
+                        ) : (
+                          <input
+                            type="text"
+                            placeholder="Catatan..."
+                            value={edit.notes}
+                            onChange={(e) =>
+                              setEdits((prev) => ({
+                                ...prev,
+                                [key]: { ...prev[key], notes: e.target.value },
+                              }))
+                            }
+                            className="w-full min-w-[120px] px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        )}
                       </td>
 
                       {/* Aksi */}
-                      <td className="py-4 px-5 text-center">
-                        <button
-                          onClick={() => handleSave(s.studentPeriodId)}
-                          disabled={isSaving}
-                          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[10px] font-bold transition-all ${
-                            hasScore
-                              ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
-                              : "bg-blue-600 text-white hover:bg-blue-700"
-                          } disabled:opacity-50`}
-                        >
-                          <Save className="w-3 h-3" />
-                          {isSaving ? "..." : hasScore ? "Update" : "Simpan"}
-                        </button>
-                      </td>
+                      {!isReadOnly && (
+                        <td className="py-4 px-5 text-center">
+                          <button
+                            onClick={() => handleSave(s.studentPeriodId)}
+                            disabled={isSaving}
+                            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[10px] font-bold transition-all ${
+                              hasScore
+                                ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
+                                : "bg-blue-600 text-white hover:bg-blue-700"
+                            } disabled:opacity-50`}
+                          >
+                            <Save className="w-3 h-3" />
+                            {isSaving ? "..." : hasScore ? "Update" : "Simpan"}
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

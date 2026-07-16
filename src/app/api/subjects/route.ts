@@ -14,14 +14,32 @@ export async function GET(request: Request) {
       activePeriodId = activePeriod[0]?.id || 1;
     }
 
-    const query = `
-      SELECT s.id, s.name, s.code, s.description, sp.period_id 
-      FROM subjects s
-      JOIN subject_periods sp ON s.id = sp.subject_id AND sp.period_id = ?
-      ORDER BY s.name ASC
-    `;
+    const teacherEmail = url.searchParams.get("teacher_email");
+    let query = "";
+    const queryParams: any[] = [activePeriodId];
 
-    const [subjects]: any = await db.query(query, [activePeriodId]);
+    if (teacherEmail) {
+      query = `
+        SELECT DISTINCT s.id, s.name, s.code, s.description, sp.period_id 
+        FROM subjects s
+        JOIN subject_periods sp ON s.id = sp.subject_id AND sp.period_id = ?
+        JOIN class_subjects cs ON cs.subject_period_id = sp.id
+        JOIN teacher_periods tp ON cs.teacher_period_id = tp.id
+        JOIN teachers t ON tp.teacher_id = t.id
+        WHERE t.email = ?
+        ORDER BY s.name ASC
+      `;
+      queryParams.push(teacherEmail);
+    } else {
+      query = `
+        SELECT s.id, s.name, s.code, s.description, sp.period_id 
+        FROM subjects s
+        JOIN subject_periods sp ON s.id = sp.subject_id AND sp.period_id = ?
+        ORDER BY s.name ASC
+      `;
+    }
+
+    const [subjects]: any = await db.query(query, queryParams);
     return NextResponse.json({ success: true, data: subjects });
   } catch (error: any) {
     console.error("Subjects GET Error:", error);

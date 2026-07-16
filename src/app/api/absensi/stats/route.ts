@@ -5,6 +5,7 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const periodId = url.searchParams.get("period_id");
+    const teacherEmail = url.searchParams.get("teacher_email");
 
     let activePeriodId = periodId;
     if (!activePeriodId || activePeriodId === "undefined") {
@@ -19,34 +20,41 @@ export async function GET(request: Request) {
     const latestTeacherDate = latestTeacherDateRows[0]?.d;
     let teacherRate = 100.0;
     if (latestTeacherDate) {
-      const [rows]: any = await db.query(
-        `SELECT 
-           SUM(CASE WHEN status IN ('Hadir', 'Terlambat') THEN 1 ELSE 0 END) AS present,
-           COUNT(*) AS total
-         FROM teacher_attendance 
-         WHERE date = ?`,
-        [latestTeacherDate]
-      );
+      let q = `SELECT 
+                 SUM(CASE WHEN ta.status IN ('Hadir', 'Terlambat') THEN 1 ELSE 0 END) AS present,
+                 COUNT(*) AS total
+               FROM teacher_attendance ta
+               JOIN teacher_periods tp ON ta.teacher_period_id = tp.id
+               JOIN teachers t ON tp.teacher_id = t.id
+               WHERE ta.date = ?`;
+      const qParams = [latestTeacherDate];
+      if (teacherEmail) {
+        q += ` AND t.email = ?`;
+        qParams.push(teacherEmail);
+      }
+      const [rows]: any = await db.query(q, qParams);
       if (rows[0] && rows[0].total > 0) {
         teacherRate = Math.round((rows[0].present / rows[0].total) * 1000) / 10;
       }
     }
 
     // 1b. Coaches
-    const [latestCoachDateRows]: any = await db.query("SELECT MAX(date) AS d FROM coach_attendance");
-    const latestCoachDate = latestCoachDateRows[0]?.d;
     let coachRate = 100.0;
-    if (latestCoachDate) {
-      const [rows]: any = await db.query(
-        `SELECT 
-           SUM(CASE WHEN status IN ('Hadir', 'Terlambat') THEN 1 ELSE 0 END) AS present,
-           COUNT(*) AS total
-         FROM coach_attendance 
-         WHERE date = ?`,
-        [latestCoachDate]
-      );
-      if (rows[0] && rows[0].total > 0) {
-        coachRate = Math.round((rows[0].present / rows[0].total) * 1000) / 10;
+    if (!teacherEmail) {
+      const [latestCoachDateRows]: any = await db.query("SELECT MAX(date) AS d FROM coach_attendance");
+      const latestCoachDate = latestCoachDateRows[0]?.d;
+      if (latestCoachDate) {
+        const [rows]: any = await db.query(
+          `SELECT 
+             SUM(CASE WHEN status IN ('Hadir', 'Terlambat') THEN 1 ELSE 0 END) AS present,
+             COUNT(*) AS total
+           FROM coach_attendance 
+           WHERE date = ?`,
+          [latestCoachDate]
+        );
+        if (rows[0] && rows[0].total > 0) {
+          coachRate = Math.round((rows[0].present / rows[0].total) * 1000) / 10;
+        }
       }
     }
 
@@ -55,47 +63,56 @@ export async function GET(request: Request) {
     const latestStudentDate = latestStudentDateRows[0]?.d;
     let studentRate = 100.0;
     if (latestStudentDate) {
-      const [rows]: any = await db.query(
-        `SELECT 
-           SUM(CASE WHEN status = 'Hadir' THEN 1 ELSE 0 END) AS present,
-           COUNT(*) AS total
-         FROM student_attendance 
-         WHERE date = ?`,
-        [latestStudentDate]
-      );
+      let q = `SELECT 
+                 SUM(CASE WHEN sa.status = 'Hadir' THEN 1 ELSE 0 END) AS present,
+                 COUNT(*) AS total
+               FROM student_attendance sa
+               JOIN student_periods sp ON sa.student_period_id = sp.id
+               WHERE sa.date = ?`;
+      const qParams = [latestStudentDate];
+      if (teacherEmail) {
+        q += ` AND sp.class_period_id IN (
+                 SELECT class_period_id FROM class_subjects WHERE teacher_period_id = (
+                   SELECT id FROM teacher_periods WHERE teacher_id = (SELECT id FROM teachers WHERE email = ? LIMIT 1) AND period_id = ? LIMIT 1
+                 )
+               )`;
+        qParams.push(teacherEmail, activePeriodId);
+      }
+      const [rows]: any = await db.query(q, qParams);
       if (rows[0] && rows[0].total > 0) {
         studentRate = Math.round((rows[0].present / rows[0].total) * 1000) / 10;
       }
     }
 
     // 1d. Extracurriculars
-    const [latestEkskulDateRows]: any = await db.query(
-      `SELECT MAX(sa.date) AS d 
-       FROM student_attendance sa
-       JOIN student_periods sp ON sa.student_period_id = sp.id
-       JOIN extracurricular_students es ON es.student_period_id = sp.id
-       WHERE sa.class_subject_id IS NULL`
-    );
-    const latestEkskulDate = latestEkskulDateRows[0]?.d;
     let ekskulRate = 100.0;
-    if (latestEkskulDate) {
-      const [rows]: any = await db.query(
-        `SELECT 
-           SUM(CASE WHEN sa.status = 'Hadir' THEN 1 ELSE 0 END) AS present,
-           COUNT(*) AS total
+    if (!teacherEmail) {
+      const [latestEkskulDateRows]: any = await db.query(
+        `SELECT MAX(sa.date) AS d 
          FROM student_attendance sa
          JOIN student_periods sp ON sa.student_period_id = sp.id
          JOIN extracurricular_students es ON es.student_period_id = sp.id
-         WHERE sa.class_subject_id IS NULL AND sa.date = ?`,
-        [latestEkskulDate]
+         WHERE sa.class_subject_id IS NULL`
       );
-      if (rows[0] && rows[0].total > 0) {
-        ekskulRate = Math.round((rows[0].present / rows[0].total) * 1000) / 10;
+      const latestEkskulDate = latestEkskulDateRows[0]?.d;
+      if (latestEkskulDate) {
+        const [rows]: any = await db.query(
+          `SELECT 
+             SUM(CASE WHEN sa.status = 'Hadir' THEN 1 ELSE 0 END) AS present,
+             COUNT(*) AS total
+           FROM student_attendance sa
+           JOIN student_periods sp ON sa.student_period_id = sp.id
+           JOIN extracurricular_students es ON es.student_period_id = sp.id
+           WHERE sa.class_subject_id IS NULL AND sa.date = ?`,
+          [latestEkskulDate]
+        );
+        if (rows[0] && rows[0].total > 0) {
+          ekskulRate = Math.round((rows[0].present / rows[0].total) * 1000) / 10;
+        }
       }
     }
 
     // 2. Fetch last 6 months trend chart data
-    // We generate last 6 months ending with the current month
     const monthsList: { key: string; label: string }[] = [];
     const dateHelper = new Date();
     for (let i = 5; i >= 0; i--) {
@@ -109,32 +126,44 @@ export async function GET(request: Request) {
       });
     }
 
-    // Query average rates per month
     const chartData = await Promise.all(
       monthsList.map(async (m) => {
         // Students rate for month
-        const [studRows]: any = await db.query(
-          `SELECT 
-             SUM(CASE WHEN status = 'Hadir' THEN 1 ELSE 0 END) AS present,
-             COUNT(*) AS total
-           FROM student_attendance 
-           WHERE DATE_FORMAT(date, '%Y-%m') = ?`,
-          [m.key]
-        );
+        let studQ = `SELECT 
+                       SUM(CASE WHEN sa.status = 'Hadir' THEN 1 ELSE 0 END) AS present,
+                       COUNT(*) AS total
+                     FROM student_attendance sa
+                     JOIN student_periods sp ON sa.student_period_id = sp.id
+                     WHERE DATE_FORMAT(sa.date, '%Y-%m') = ?`;
+        const studParams = [m.key];
+        if (teacherEmail) {
+          studQ += ` AND sp.class_period_id IN (
+                       SELECT class_period_id FROM class_subjects WHERE teacher_period_id = (
+                         SELECT id FROM teacher_periods WHERE teacher_id = (SELECT id FROM teachers WHERE email = ? LIMIT 1) AND period_id = ? LIMIT 1
+                       )
+                     )`;
+          studParams.push(teacherEmail, activePeriodId || "");
+        }
+        const [studRows]: any = await db.query(studQ, studParams);
         const studTotal = studRows[0]?.total || 0;
-        const studRate = studTotal > 0 ? Math.round((studRows[0].present / studTotal) * 100) : 95; // fallback to 95 if no data to keep graph look good
+        const studRate = studTotal > 0 ? Math.round((studRows[0].present / studTotal) * 100) : 95;
 
         // Teachers/Coaches (Staff) rate for month
-        const [teachRows]: any = await db.query(
-          `SELECT 
-             SUM(CASE WHEN status IN ('Hadir', 'Terlambat') THEN 1 ELSE 0 END) AS present,
-             COUNT(*) AS total
-           FROM teacher_attendance 
-           WHERE DATE_FORMAT(date, '%Y-%m') = ?`,
-          [m.key]
-        );
+        let teachQ = `SELECT 
+                       SUM(CASE WHEN ta.status IN ('Hadir', 'Terlambat') THEN 1 ELSE 0 END) AS present,
+                       COUNT(*) AS total
+                     FROM teacher_attendance ta
+                     JOIN teacher_periods tp ON ta.teacher_period_id = tp.id
+                     JOIN teachers t ON tp.teacher_id = t.id
+                     WHERE DATE_FORMAT(ta.date, '%Y-%m') = ?`;
+        const teachParams = [m.key];
+        if (teacherEmail) {
+          teachQ += ` AND t.email = ?`;
+          teachParams.push(teacherEmail);
+        }
+        const [teachRows]: any = await db.query(teachQ, teachParams);
         const teachTotal = teachRows[0]?.total || 0;
-        const teachRate = teachTotal > 0 ? Math.round((teachRows[0].present / teachTotal) * 100) : 96; // fallback to 96
+        const teachRate = teachTotal > 0 ? Math.round((teachRows[0].present / teachTotal) * 100) : 96;
 
         return {
           month: m.label,
@@ -145,51 +174,97 @@ export async function GET(request: Request) {
     );
 
     // 3. Fetch Recent Attendance Log
-    const [recentRows]: any = await db.query(
-      `(
-        SELECT 
-          sa.id,
-          s.name,
-          'Siswa' AS role,
-          DATE_FORMAT(sa.date, '%d %b %Y') AS time,
-          sa.status,
-          sa.date,
-          sa.created_at
-        FROM student_attendance sa
-        JOIN student_periods sp ON sa.student_period_id = sp.id
-        JOIN students s ON sp.student_id = s.id
-      )
-      UNION ALL
-      (
-        SELECT 
-          ta.id,
-          t.name,
-          'Guru' AS role,
-          IFNULL(ta.check_in_time, DATE_FORMAT(ta.date, '%d %b %Y')) AS time,
-          ta.status,
-          ta.date,
-          ta.created_at
-        FROM teacher_attendance ta
-        JOIN teacher_periods tp ON ta.teacher_period_id = tp.id
-        JOIN teachers t ON tp.teacher_id = t.id
-      )
-      UNION ALL
-      (
-        SELECT 
-          ca.id,
-          c.name,
-          'Coach' AS role,
-          IFNULL(ca.check_in_time, '—') AS time,
-          ca.status,
-          ca.date,
-          ca.created_at
-        FROM coach_attendance ca
-        JOIN coach_periods cp ON ca.coach_period_id = cp.id
-        JOIN coaches c ON cp.coach_id = c.id
-      )
-      ORDER BY date DESC, created_at DESC
-      LIMIT 8`
-    );
+    let recentRows: any[] = [];
+    if (teacherEmail) {
+      const [rows]: any = await db.query(
+        `SELECT * FROM (
+          (
+            SELECT 
+              sa.id,
+              s.name,
+              'Siswa' AS role,
+              DATE_FORMAT(sa.date, '%d %b %Y') AS time,
+              sa.status,
+              sa.date,
+              sa.created_at
+            FROM student_attendance sa
+            JOIN student_periods sp ON sa.student_period_id = sp.id
+            JOIN students s ON sp.student_id = s.id
+            WHERE sp.class_period_id IN (
+              SELECT class_period_id FROM class_subjects WHERE teacher_period_id = (
+                SELECT id FROM teacher_periods WHERE teacher_id = (SELECT id FROM teachers WHERE email = ? LIMIT 1) AND period_id = ? LIMIT 1
+              )
+            )
+          )
+          UNION ALL
+          (
+            SELECT 
+              ta.id,
+              t.name,
+              'Guru' AS role,
+              IFNULL(ta.check_in_time, DATE_FORMAT(ta.date, '%d %b %Y')) AS time,
+              ta.status,
+              ta.date,
+              ta.created_at
+            FROM teacher_attendance ta
+            JOIN teacher_periods tp ON ta.teacher_period_id = tp.id
+            JOIN teachers t ON tp.teacher_id = t.id
+            WHERE t.email = ?
+          )
+        ) combined
+        ORDER BY date DESC, created_at DESC
+        LIMIT 8`,
+        [teacherEmail, activePeriodId || "", teacherEmail]
+      );
+      recentRows = rows;
+    } else {
+      const [rows]: any = await db.query(
+        `(
+          SELECT 
+            sa.id,
+            s.name,
+            'Siswa' AS role,
+            DATE_FORMAT(sa.date, '%d %b %Y') AS time,
+            sa.status,
+            sa.date,
+            sa.created_at
+          FROM student_attendance sa
+          JOIN student_periods sp ON sa.student_period_id = sp.id
+          JOIN students s ON sp.student_id = s.id
+        )
+        UNION ALL
+        (
+          SELECT 
+            ta.id,
+            t.name,
+            'Guru' AS role,
+            IFNULL(ta.check_in_time, DATE_FORMAT(ta.date, '%d %b %Y')) AS time,
+            ta.status,
+            ta.date,
+            ta.created_at
+          FROM teacher_attendance ta
+          JOIN teacher_periods tp ON ta.teacher_period_id = tp.id
+          JOIN teachers t ON tp.teacher_id = t.id
+        )
+        UNION ALL
+        (
+          SELECT 
+            ca.id,
+            c.name,
+            'Coach' AS role,
+            IFNULL(ca.check_in_time, '—') AS time,
+            ca.status,
+            ca.date,
+            ca.created_at
+          FROM coach_attendance ca
+          JOIN coach_periods cp ON ca.coach_period_id = cp.id
+          JOIN coaches c ON cp.coach_id = c.id
+        )
+        ORDER BY date DESC, created_at DESC
+        LIMIT 8`
+      );
+      recentRows = rows;
+    }
 
     const recentLogs = recentRows.map((r: any) => {
       const nameParts = r.name.trim().split(" ");

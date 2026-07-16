@@ -31,6 +31,11 @@ export default function LoginPage() {
 
       if (response.ok && data.success) {
         // Successful login
+        const userToStore = {
+          ...data.user,
+          role: data.user.role === "teacher" ? "guru" : data.user.role
+        };
+        localStorage.setItem("user", JSON.stringify(userToStore));
         router.push("/dashboard");
       } else {
         setError(data.message || "Email atau kata sandi salah");

@@ -11,7 +11,7 @@ export default function RegisterNewAccountPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  
+
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -60,7 +60,7 @@ export default function RegisterNewAccountPage() {
 
   return (
     <div className="flex flex-col gap-8 max-w-4xl mx-auto">
-      
+
       {/* Title block */}
       <div>
         <h1 className="text-3xl font-extrabold text-[#1e293b]">Pendaftaran Akun Baru</h1>
@@ -71,7 +71,7 @@ export default function RegisterNewAccountPage() {
 
       {/* Main Form container */}
       <form onSubmit={handleSave} className="bg-white border border-slate-100 rounded-3xl p-8 shadow-[0_4px_30px_rgb(0,0,0,0.02)] flex flex-col gap-8">
-        
+
         {errorMsg && (
           <div className="bg-rose-50 border border-rose-100 text-rose-600 text-xs font-bold px-4 py-3 rounded-xl">
             {errorMsg}
@@ -79,13 +79,13 @@ export default function RegisterNewAccountPage() {
         )}
 
         <div className="flex flex-col md:flex-row gap-8 items-start">
-          
+
           {/* Left Column: Avatar upload */}
           <div className="w-full md:w-[260px] flex flex-col items-center gap-4 shrink-0 p-4 border-r border-slate-100/80">
             <div className="w-40 h-40 rounded-full bg-blue-50/50 border border-slate-100 flex items-center justify-center text-slate-400 shadow-inner relative overflow-hidden">
               <User className="w-16 h-16 stroke-[1.25]" />
             </div>
-            
+
             <div className="flex flex-col items-center text-center gap-1.5">
               <span className="text-xs font-bold text-slate-700">Foto Profil</span>
               <span className="text-[10px] text-slate-400 font-semibold">Maksimal 2MB (JPG, PNG)</span>
@@ -101,7 +101,7 @@ export default function RegisterNewAccountPage() {
 
           {/* Right Column: Input Fields */}
           <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-6">
-            
+
             {/* Nama Lengkap */}
             <div className="flex flex-col gap-2">
               <label className="text-xs font-bold text-slate-700">
@@ -148,7 +148,7 @@ export default function RegisterNewAccountPage() {
                   <option value="admin">Administrator</option>
                   <option value="guru">Guru</option>
                   <option value="coach">Coach</option>
-                  <option value="wali">Wali Murid</option>
+                  <option value="kepala_sekolah">Kepala Sekolah</option>
                 </select>
                 <span className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
                   <ChevronDown className="w-4 h-4" />

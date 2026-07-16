@@ -11,12 +11,29 @@ import {
   ChevronDown
 } from "lucide-react";
 import { StatCard } from "@/components/ui/StatCard";
+import { useRole } from "@/lib/useRole";
 
 export default function DashboardPage() {
+  const { role } = useRole();
   const [periodId, setPeriodId] = useState("");
   const [periodName, setPeriodName] = useState("");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState("Admin");
+
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        const u = JSON.parse(userStr);
+        if (u.name) {
+          setUserName(u.name);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
 
   // Mendengarkan perubahan periode akademik
   useEffect(() => {
@@ -65,7 +82,7 @@ export default function DashboardPage() {
       iconBg: "bg-blue-50",
       iconColor: "text-blue-600",
     },
-    {
+    ...(role !== "guru" ? [{
       title: "Total Guru",
       value: loading ? "—" : String(data?.totalTeachers || 0),
       badge: "Aktif",
@@ -73,7 +90,7 @@ export default function DashboardPage() {
       icon: GraduationCap,
       iconBg: "bg-amber-50/70",
       iconColor: "text-amber-600",
-    },
+    }] : []),
     {
       title: "Kehadiran Hari Ini",
       value: loading ? "—" : `${data?.attendanceRate || 0}%`,
@@ -100,7 +117,7 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">
-            Selamat Datang, Admin
+            Selamat Datang, {userName}
           </h1>
           <p className="text-sm text-slate-400 mt-1">
             Berikut adalah ringkasan operasional SD Islam Baiturrachman hari ini.

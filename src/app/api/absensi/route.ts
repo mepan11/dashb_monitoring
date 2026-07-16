@@ -114,30 +114,37 @@ export async function GET(request: Request) {
       }
 
     } else if (type === "teachers") {
+      const teacherEmail = url.searchParams.get("teacher_email");
       if (isRange) {
         // Query untuk histori rentang
-        const [rows]: any = await db.query(
-          `SELECT DATE_FORMAT(ta.date, '%Y-%m-%d') AS date, t.name, t.nip, ta.status AS attendanceStatus, ta.check_in_time AS checkInTime, ta.check_out_time AS checkOutTime
+        let q = `SELECT DATE_FORMAT(ta.date, '%Y-%m-%d') AS date, t.name, t.nip, ta.status AS attendanceStatus, ta.check_in_time AS checkInTime, ta.check_out_time AS checkOutTime
            FROM teacher_attendance ta
            JOIN teacher_periods tp ON ta.teacher_period_id = tp.id
            JOIN teachers t ON tp.teacher_id = t.id
-           WHERE tp.period_id = ? AND ta.date BETWEEN ? AND ?
-           ORDER BY ta.date ASC, t.name ASC`,
-          [activePeriodId, startDate, endDate]
-        );
+           WHERE tp.period_id = ? AND ta.date BETWEEN ? AND ?`;
+        const qParams = [activePeriodId, startDate, endDate];
+        if (teacherEmail) {
+          q += ` AND t.email = ?`;
+          qParams.push(teacherEmail);
+        }
+        q += ` ORDER BY ta.date ASC, t.name ASC`;
+        const [rows]: any = await db.query(q, qParams);
         return NextResponse.json({ success: true, data: rows });
       } else {
         // Ambil data guru dan kehadiran pada tanggal tersebut
-        const [rows]: any = await db.query(
-          `SELECT t.id, t.name, t.email, t.nip, t.specialization, t.status AS teacherStatus,
+        let q = `SELECT t.id, t.name, t.email, t.nip, t.specialization, t.status AS teacherStatus,
                   ta.status AS attendanceStatus, ta.check_in_time AS checkInTime, ta.check_out_time AS checkOutTime
            FROM teacher_periods tp
            JOIN teachers t ON tp.teacher_id = t.id
            LEFT JOIN teacher_attendance ta ON tp.id = ta.teacher_period_id AND ta.date = ?
-           WHERE tp.period_id = ?
-           ORDER BY t.name ASC`,
-          [date, activePeriodId]
-        );
+           WHERE tp.period_id = ?`;
+        const qParams = [date, activePeriodId];
+        if (teacherEmail) {
+          q += ` AND t.email = ?`;
+          qParams.push(teacherEmail);
+        }
+        q += ` ORDER BY t.name ASC`;
+        const [rows]: any = await db.query(q, qParams);
 
         const formatted = rows.map((t: any) => {
           const nameParts = t.name.trim().split(" ");

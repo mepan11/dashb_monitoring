@@ -1,4 +1,6 @@
-import React from "react";
+"use client";
+
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -20,6 +22,23 @@ import {
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
+  const [role, setRole] = useState<string>("admin");
+
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        const u = JSON.parse(userStr);
+        if (u.role) {
+          let mappedRole = u.role;
+          if (mappedRole === "teacher") mappedRole = "guru";
+          setRole(mappedRole);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
 
   const menuItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -36,13 +55,32 @@ export const Sidebar: React.FC = () => {
     { name: "Kelola Akun", href: "/dashboard/kelola-akun", icon: UserCog },
   ];
 
+  const getFilteredMenuItems = () => {
+    switch (role) {
+      case "guru":
+        return menuItems.filter(item => 
+          ["Dashboard", "Siswa", "Kelas", "Mata Pelajaran", "Absensi", "Nilai", "Periode Akademik"].includes(item.name)
+        );
+      case "coach":
+        return menuItems.filter(item => 
+          ["Dashboard", "Ekstrakurikuler", "Absensi", "Nilai Ekstrakurikuler", "Periode Akademik"].includes(item.name)
+        );
+      case "kepala_sekolah":
+      case "admin":
+      default:
+        return menuItems;
+    }
+  };
+
+  const filteredItems = getFilteredMenuItems();
+
   return (
     <aside className="w-64 bg-[#f0f4fa] h-screen flex flex-col justify-between border-r border-slate-200/60 p-5 shrink-0">
       <div className="flex flex-col gap-8">
         {/* Brand Header */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-[#2563eb] flex items-center justify-center text-white shadow-md">
-            <Shield className="w-5 h-5 fill-white/20" />
+          <div className="w-10 h-10 rounded-lg bg-[#2563eb] flex items-center justify-center text-white shadow-md font-extrabold text-sm tracking-wider">
+            BR
           </div>
           <div className="flex flex-col">
             <span className="font-extrabold text-sm text-[#1d4ed8] leading-tight">
@@ -51,15 +89,15 @@ export const Sidebar: React.FC = () => {
             <span className="font-extrabold text-sm text-[#1d4ed8] leading-tight">
               Baiturrachman
             </span>
-            <span className="text-[10px] font-semibold text-slate-400 mt-0.5">
-              Admin Management
+            <span className="text-[10px] font-semibold text-slate-400 mt-0.5 capitalize">
+              {role.replace("_", " ")} Portal
             </span>
           </div>
         </div>
 
         {/* Navigation Menus */}
         <nav className="flex flex-col gap-1.5">
-          {menuItems.map((item) => {
+          {filteredItems.map((item) => {
             const isActive = item.href === "/dashboard"
               ? pathname === "/dashboard"
               : pathname === item.href || pathname.startsWith(item.href + "/");
@@ -86,6 +124,7 @@ export const Sidebar: React.FC = () => {
       {/* Logout Button */}
       <Link
         href="/"
+        onClick={() => localStorage.removeItem("user")}
         className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 transition-all"
       >
         <LogOut className="w-5 h-5" />

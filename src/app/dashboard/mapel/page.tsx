@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { BookOpen, Users, Calendar, ArrowRight, Plus, Pencil, Trash2, X, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 
 interface SubjectClassCard {
   id: string;
@@ -22,6 +23,7 @@ interface MasterSubject {
 const LIMIT = 10;
 
 export default function MapelPage() {
+  const { isReadOnly } = useRole();
   const [activeTab, setActiveTab] = useState<"master" | "class">("master");
   const [periodId, setPeriodId] = useState<string>("");
   
@@ -198,7 +200,15 @@ export default function MapelPage() {
     if (!pid) return;
     setLoadingClasses(true);
     try {
-      const res = await fetch(`/api/classes?period_id=${pid}`);
+      const userStr = localStorage.getItem("user");
+      let teacherEmailParam = "";
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.role === "guru" && u.email) {
+          teacherEmailParam = `&teacher_email=${encodeURIComponent(u.email)}`;
+        }
+      }
+      const res = await fetch(`/api/classes?period_id=${pid}${teacherEmailParam}`);
       const json = await res.json();
       if (json.success) {
         setClasses(json.data);
@@ -215,7 +225,15 @@ export default function MapelPage() {
     if (!pid) return;
     setLoadingSubjects(true);
     try {
-      const res = await fetch(`/api/subjects?period_id=${pid}`);
+      const userStr = localStorage.getItem("user");
+      let teacherEmailParam = "";
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.role === "guru" && u.email) {
+          teacherEmailParam = `&teacher_email=${encodeURIComponent(u.email)}`;
+        }
+      }
+      const res = await fetch(`/api/subjects?period_id=${pid}${teacherEmailParam}`);
       const json = await res.json();
       if (json.success) {
         setSubjects(json.data);
@@ -358,7 +376,7 @@ export default function MapelPage() {
           </p>
         </div>
 
-        {activeTab === "master" && (
+        {activeTab === "master" && !isReadOnly && (
           <button
             onClick={handleOpenAddModal}
             className="!w-auto py-2.5 px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]"
@@ -499,18 +517,22 @@ export default function MapelPage() {
                             >
                               <BookOpen className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => handleOpenEditModal(sub)}
-                              className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteSubject(sub.id, sub.name)}
-                              className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {!isReadOnly && (
+                              <>
+                                <button
+                                  onClick={() => handleOpenEditModal(sub)}
+                                  className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteSubject(sub.id, sub.name)}
+                                  className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -782,55 +804,57 @@ export default function MapelPage() {
             <div className="p-6 overflow-y-auto flex flex-col gap-6">
 
               {/* Form to Add/Edit Assignment */}
-              <form onSubmit={handleSaveAssignment} className="bg-slate-50/50 border border-slate-100 p-4 rounded-2xl flex flex-col gap-4">
-                <h4 className="text-xs font-bold text-slate-700">
-                  {editingAssignmentId ? "Edit Tugas Master" : "Tambah Tugas Master Baru"}
-                </h4>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Nama Tugas</label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: Tugas 1: Algoritma"
-                      value={newAssignmentName}
-                      onChange={(e) => setNewAssignmentName(e.target.value)}
-                      required
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+              {!isReadOnly && (
+                <form onSubmit={handleSaveAssignment} className="bg-slate-50/50 border border-slate-100 p-4 rounded-2xl flex flex-col gap-4">
+                  <h4 className="text-xs font-bold text-slate-700">
+                    {editingAssignmentId ? "Edit Tugas Master" : "Tambah Tugas Master Baru"}
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Nama Tugas</label>
+                      <input
+                        type="text"
+                        placeholder="Contoh: Tugas 1: Algoritma"
+                        value={newAssignmentName}
+                        onChange={(e) => setNewAssignmentName(e.target.value)}
+                        required
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Deskripsi Tugas</label>
+                      <input
+                        type="text"
+                        placeholder="Keterangan tugas..."
+                        value={newAssignmentDesc}
+                        onChange={(e) => setNewAssignmentDesc(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex flex-col gap-2">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Deskripsi Tugas</label>
-                    <input
-                      type="text"
-                      placeholder="Keterangan tugas..."
-                      value={newAssignmentDesc}
-                      onChange={(e) => setNewAssignmentDesc(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2">
-                  {editingAssignmentId && (
+                  <div className="flex justify-end gap-2">
+                    {editingAssignmentId && (
+                      <button
+                        type="button"
+                        onClick={cancelEditAssignment}
+                        className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-all"
+                      >
+                        Batal
+                      </button>
+                    )}
                     <button
-                      type="button"
-                      onClick={cancelEditAssignment}
-                      className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-all"
+                      type="submit"
+                      disabled={savingAssignment}
+                      className="px-5 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all disabled:opacity-60"
                     >
-                      Batal
+                      {savingAssignment ? "Menyimpan..." : editingAssignmentId ? "Perbarui" : "Tambah"}
                     </button>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={savingAssignment}
-                    className="px-5 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all disabled:opacity-60"
-                  >
-                    {savingAssignment ? "Menyimpan..." : editingAssignmentId ? "Perbarui" : "Tambah"}
-                  </button>
-                </div>
-              </form>
+                  </div>
+                </form>
+              )}
 
               {/* List of assignments */}
               <div className="flex flex-col gap-3">
@@ -851,22 +875,24 @@ export default function MapelPage() {
                           )}
                         </div>
                         
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => startEditAssignment(assign)}
-                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteAssignment(assign.id)}
-                            className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        {!isReadOnly && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startEditAssignment(assign)}
+                              className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAssignment(assign.id)}
+                              className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
