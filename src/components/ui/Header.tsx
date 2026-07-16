@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Search, Bell, Settings, Calendar } from "lucide-react";
+import Link from "next/link";
+import { Search, Bell, Settings, Calendar, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 interface AcademicPeriod {
@@ -16,6 +17,14 @@ interface AcademicPeriod {
 export const Header: React.FC = () => {
   const [periods, setPeriods] = useState<AcademicPeriod[]>([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isDropdownOpen) return;
+    const handleClose = () => setIsDropdownOpen(false);
+    window.addEventListener("click", handleClose);
+    return () => window.removeEventListener("click", handleClose);
+  }, [isDropdownOpen]);
 
   useEffect(() => {
     async function fetchPeriods() {
@@ -123,9 +132,37 @@ export const Header: React.FC = () => {
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
         </button>
 
-        <button className="p-2 text-slate-500 hover:bg-slate-50 rounded-full transition-all">
-          <Settings className="w-5 h-5" />
-        </button>
+        {/* Settings Dropdown Container */}
+        <div className="relative">
+          <button 
+            onClick={(e) => { e.stopPropagation(); setIsDropdownOpen(!isDropdownOpen); }}
+            className="p-2 text-slate-500 hover:bg-slate-50 rounded-full transition-all"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+
+          {isDropdownOpen && (
+            <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-100 rounded-xl shadow-[0_4px_20px_rgb(0,0,0,0.08)] py-1.5 z-50">
+              <Link 
+                href="/dashboard/kelola-akun" 
+                onClick={() => setIsDropdownOpen(false)}
+                className="flex items-center gap-2.5 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all"
+              >
+                <User className="w-4 h-4 text-slate-400" />
+                Lihat Profil Akun
+              </Link>
+              <div className="h-px bg-slate-100 my-1"></div>
+              <Link 
+                href="/"
+                onClick={() => setIsDropdownOpen(false)}
+                className="flex items-center gap-2.5 px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition-all"
+              >
+                <LogOut className="w-4 h-4 text-red-500" />
+                Logout
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );
