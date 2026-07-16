@@ -71,10 +71,9 @@ export async function GET(
         `SELECT g.daily_assignment, g.uts, g.uas, g.average,
                 subj.name AS subject_name
          FROM grades g
-         JOIN class_periods clp ON g.class_period_id = clp.id
-         LEFT JOIN class_subjects cs ON cs.class_period_id = clp.id
-         LEFT JOIN subject_periods sp ON cs.subject_period_id = sp.id
-         LEFT JOIN subjects subj ON sp.subject_id = subj.id
+         JOIN class_subjects cs ON g.class_subject_id = cs.id
+         JOIN subject_periods sp ON cs.subject_period_id = sp.id
+         JOIN subjects subj ON sp.subject_id = subj.id
          WHERE g.student_period_id = ?
          LIMIT 10`,
         [studentPeriodId]

@@ -39,6 +39,136 @@ export default function MapelPage() {
   const [searchDesc, setSearchDesc] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Assignments Modal State
+  const [isAssignmentsModalOpen, setIsAssignmentsModalOpen] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState<MasterSubject | null>(null);
+  const [classSubjects, setClassSubjects] = useState<any[]>([]);
+  const [allAssignments, setAllAssignments] = useState<any[]>([]);
+  const [selectedClassSubjectId, setSelectedClassSubjectId] = useState("");
+  
+  // Assignment Inputs
+  const [newAssignmentName, setNewAssignmentName] = useState("");
+  const [newAssignmentDesc, setNewAssignmentDesc] = useState("");
+  const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+  const [savingAssignment, setSavingAssignment] = useState(false);
+
+  const handleOpenAssignmentsModal = async (subj: MasterSubject) => {
+    setSelectedSubject(subj);
+    setIsAssignmentsModalOpen(true);
+    setLoadingAssignments(true);
+    setNewAssignmentName("");
+    setNewAssignmentDesc("");
+    setEditingAssignmentId(null);
+    try {
+      const res = await fetch(`/api/assignments?subject_id=${subj.id}`);
+      const json = await res.json();
+      if (json.success) {
+        setAllAssignments(json.data || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingAssignments(false);
+    }
+  };
+
+  const handleSaveAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSubject || !newAssignmentName) return;
+    setSavingAssignment(true);
+    try {
+      if (editingAssignmentId) {
+        // Edit mode
+        const res = await fetch(`/api/assignments/${editingAssignmentId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: newAssignmentName, description: newAssignmentDesc }),
+        });
+        const json = await res.json();
+        if (json.success) {
+          alert("Tugas master berhasil diperbarui");
+          // Refresh
+          const refreshRes = await fetch(`/api/assignments?subject_id=${selectedSubject.id}`);
+          const refreshJson = await refreshRes.json();
+          if (refreshJson.success) {
+            setAllAssignments(refreshJson.data || []);
+          }
+          setEditingAssignmentId(null);
+          setNewAssignmentName("");
+          setNewAssignmentDesc("");
+        } else {
+          alert(json.message || "Gagal memperbarui tugas");
+        }
+      } else {
+        // Create mode
+        const res = await fetch(`/api/assignments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subjectId: selectedSubject.id,
+            name: newAssignmentName,
+            description: newAssignmentDesc,
+          }),
+        });
+        const json = await res.json();
+        if (json.success) {
+          alert("Tugas master berhasil ditambahkan");
+          // Refresh
+          const refreshRes = await fetch(`/api/assignments?subject_id=${selectedSubject.id}`);
+          const refreshJson = await refreshRes.json();
+          if (refreshJson.success) {
+            setAllAssignments(refreshJson.data || []);
+          }
+          setNewAssignmentName("");
+          setNewAssignmentDesc("");
+        } else {
+          alert(json.message || "Gagal menambahkan tugas");
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan koneksi");
+    } finally {
+      setSavingAssignment(false);
+    }
+  };
+
+  const handleDeleteAssignment = async (assignmentId: string) => {
+    if (!confirm("Hapus tugas master ini? Semua data nilai siswa untuk tugas ini di seluruh kelas juga akan dihapus.")) return;
+    try {
+      const res = await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.success) {
+        alert("Tugas master berhasil dihapus");
+        if (selectedSubject) {
+          // Refresh
+          const refreshRes = await fetch(`/api/assignments?subject_id=${selectedSubject.id}`);
+          const refreshJson = await refreshRes.json();
+          if (refreshJson.success) {
+            setAllAssignments(refreshJson.data || []);
+          }
+        }
+      } else {
+        alert(json.message || "Gagal menghapus tugas");
+      }
+    } catch {
+      alert("Terjadi kesalahan koneksi");
+    }
+  };
+
+  const startEditAssignment = (assign: any) => {
+    setEditingAssignmentId(assign.id);
+    setNewAssignmentName(assign.name);
+    setNewAssignmentDesc(assign.description || "");
+  };
+
+  const cancelEditAssignment = () => {
+    setEditingAssignmentId(null);
+    setNewAssignmentName("");
+    setNewAssignmentDesc("");
+  };
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
@@ -363,6 +493,13 @@ export default function MapelPage() {
                         <td className="py-4 px-6 text-center">
                           <div className="flex items-center justify-center gap-2">
                             <button
+                              onClick={() => handleOpenAssignmentsModal(sub)}
+                              title="Kelola Tugas / Rincian Nilai Harian"
+                              className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+                            >
+                              <BookOpen className="w-4 h-4" />
+                            </button>
+                            <button
                               onClick={() => handleOpenEditModal(sub)}
                               className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
                             >
@@ -618,6 +755,136 @@ export default function MapelPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+      {/* POPUP MODAL: MANAGE ASSIGNMENTS */}
+      {isAssignmentsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-all">
+          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-100 max-h-[85vh]">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div>
+                <h3 className="text-lg font-extrabold text-slate-800">
+                  Kelola Tugas - {selectedSubject?.name}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">Daftar tugas harian / tujuan pembelajaran untuk mata pelajaran ini</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAssignmentsModalOpen(false)}
+                className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 overflow-y-auto flex flex-col gap-6">
+
+              {/* Form to Add/Edit Assignment */}
+              <form onSubmit={handleSaveAssignment} className="bg-slate-50/50 border border-slate-100 p-4 rounded-2xl flex flex-col gap-4">
+                <h4 className="text-xs font-bold text-slate-700">
+                  {editingAssignmentId ? "Edit Tugas Master" : "Tambah Tugas Master Baru"}
+                </h4>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Nama Tugas</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Tugas 1: Algoritma"
+                      value={newAssignmentName}
+                      onChange={(e) => setNewAssignmentName(e.target.value)}
+                      required
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Deskripsi Tugas</label>
+                    <input
+                      type="text"
+                      placeholder="Keterangan tugas..."
+                      value={newAssignmentDesc}
+                      onChange={(e) => setNewAssignmentDesc(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  {editingAssignmentId && (
+                    <button
+                      type="button"
+                      onClick={cancelEditAssignment}
+                      className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-all"
+                    >
+                      Batal
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={savingAssignment}
+                    className="px-5 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all disabled:opacity-60"
+                  >
+                    {savingAssignment ? "Menyimpan..." : editingAssignmentId ? "Perbarui" : "Tambah"}
+                  </button>
+                </div>
+              </form>
+
+              {/* List of assignments */}
+              <div className="flex flex-col gap-3">
+                <h4 className="text-xs font-bold text-slate-700">Daftar Tugas Terdaftar</h4>
+                
+                {loadingAssignments ? (
+                  <div className="text-center py-6 text-xs text-slate-400 font-semibold">Memuat tugas...</div>
+                ) : allAssignments.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-slate-400 font-semibold">Belum ada tugas master yang didefinisikan untuk mata pelajaran ini.</div>
+                ) : (
+                  <div className="border border-slate-100 rounded-2xl overflow-hidden divide-y divide-slate-100">
+                    {allAssignments.map((assign) => (
+                      <div key={assign.id} className="p-4 flex items-center justify-between hover:bg-slate-50/30 transition-all">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-800">{assign.name}</span>
+                          {assign.description && (
+                            <span className="text-[10px] text-slate-400 font-medium">{assign.description}</span>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => startEditAssignment(assign)}
+                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAssignment(assign.id)}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end items-center">
+              <button
+                type="button"
+                onClick={() => setIsAssignmentsModalOpen(false)}
+                className="px-6 py-2.5 bg-slate-800 text-white hover:bg-slate-900 rounded-xl text-xs font-bold shadow-sm transition-all"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

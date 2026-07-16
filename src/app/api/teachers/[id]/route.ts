@@ -100,7 +100,7 @@ export async function GET(
         `
         SELECT AVG(g.average) AS avg_score 
         FROM grades g 
-        JOIN class_subjects cs ON g.class_period_id = cs.class_period_id
+        JOIN class_subjects cs ON g.class_subject_id = cs.id
         WHERE cs.teacher_period_id = ?
         `,
         [teacherPeriodId]

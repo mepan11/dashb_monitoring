@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
@@ -15,6 +15,8 @@ import {
   Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 interface TeacherRow {
   id: string;
@@ -62,6 +64,10 @@ export default function TeacherAttendancePage() {
   const today = new Date().toISOString().split("T")[0];
   const [selectedDate, setSelectedDate] = useState(today);
 
+  // Date range for PDF rekap
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
+
   // Mendengarkan perubahan periode akademik
   useEffect(() => {
     const cached = localStorage.getItem("active_period_id") || "";
@@ -80,6 +86,30 @@ export default function TeacherAttendancePage() {
     };
   }, []);
 
+  // Initialize date range defaults safely
+  useEffect(() => {
+    const tzoffset = new Date().getTimezoneOffset() * 60000;
+    const todayStr = new Date(Date.now() - tzoffset).toISOString().slice(0, 10);
+    const thirtyDaysAgo = new Date(Date.now() - tzoffset - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    setStartDate(thirtyDaysAgo);
+    setEndDate(todayStr);
+  }, []);
+
+  const formatIndonesianDate = (dateStr: string) => {
+    try {
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const date = new Date(year, month - 1, day);
+      return date.toLocaleDateString("id-ID", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   const fetchTeachers = useCallback(async () => {
     if (!periodId) return;
     setLoading(true);
@@ -90,7 +120,6 @@ export default function TeacherAttendancePage() {
       const json = await res.json();
       if (json.success) {
         setTeachers(json.data);
-        // Pre-fill attendance state from existing records
         const initialStatus: Record<string, string> = {};
         const initialCheckIn: Record<string, string> = {};
         const initialCheckOut: Record<string, string> = {};
@@ -143,6 +172,152 @@ export default function TeacherAttendancePage() {
       }
     } catch {
       alert("Terjadi kesalahan koneksi");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePrintPDF = async () => {
+    if (!startDate || !endDate) {
+      alert("Pilih Tanggal Mulai dan Tanggal Akhir");
+      return;
+    }
+    setSaving(true);
+    try {
+      let queryParams = new URLSearchParams({
+        type: "guru",
+        startDate,
+        endDate
+      });
+      if (periodId) {
+        queryParams.append("period_id", periodId);
+      }
+
+      const res = await fetch(`/api/absensi?${queryParams.toString()}`);
+      const data = await res.json();
+
+      if (!data.success) {
+        alert(data.message || "Gagal mengambil riwayat presensi");
+        setSaving(false);
+        return;
+      }
+
+      const records = data.data;
+      if (records.length === 0) {
+        alert("Tidak ada data presensi pada rentang tanggal tersebut.");
+        setSaving(false);
+        return;
+      }
+
+      const groupedByDate: { [date: string]: any[] } = {};
+      records.forEach((r: any) => {
+        const d = r.date;
+        if (!groupedByDate[d]) {
+          groupedByDate[d] = [];
+        }
+        groupedByDate[d].push(r);
+      });
+
+      const sortedDates = Object.keys(groupedByDate).sort();
+
+      const doc = new jsPDF();
+
+      doc.setFontSize(10);
+      doc.setFont("Helvetica", "normal");
+      doc.setTextColor(100, 116, 139);
+      doc.text("Sistem Informasi Monitoring Presensi", 14, 24);
+
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.5);
+      doc.line(14, 28, 196, 28);
+
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(37, 99, 235);
+      doc.text("Laporan Kehadiran Guru", 14, 38);
+
+      doc.setFontSize(9);
+      doc.setFont("Helvetica", "normal");
+      doc.setTextColor(71, 85, 105);
+
+      const formattedPeriod = `Periode: ${formatIndonesianDate(startDate)} s/d ${formatIndonesianDate(endDate)}`;
+      doc.text(formattedPeriod, 14, 44);
+
+      let currentY = 50;
+
+      sortedDates.forEach((date) => {
+        if (currentY > 240) {
+          doc.addPage();
+          currentY = 20;
+        }
+
+        doc.setFont("Helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(15, 23, 42);
+        doc.text(`Hari / Tanggal: ${formatIndonesianDate(date)}`, 14, currentY);
+        currentY += 4;
+
+        const dateRecords = groupedByDate[date];
+        const headers = ["No", "Nama Guru", "NIP", "Waktu Masuk", "Waktu Keluar", "Status"];
+        const rows = dateRecords.map((r: any, idx: number) => {
+          let effectiveStatus = r.attendanceStatus;
+          if ((r.attendanceStatus === "Hadir" || r.attendanceStatus === "Terlambat") && r.checkInTime) {
+            const timePart = r.checkInTime.replace(" WIB", "").trim();
+            const [hh, mm] = timePart.split(":").map(Number);
+            const totalMins = hh * 60 + mm;
+            effectiveStatus = totalMins < 7 * 60 ? "Hadir" : "Terlambat";
+          }
+          return [idx + 1, r.name, r.nip || "—", r.checkInTime || "—", r.checkOutTime || "—", effectiveStatus];
+        });
+
+        autoTable(doc, {
+          head: [headers],
+          body: rows,
+          startY: currentY,
+          theme: "grid",
+          headStyles: {
+            fillColor: [15, 23, 42],
+            textColor: [255, 255, 255],
+            fontSize: 9,
+            fontStyle: "bold"
+          },
+          bodyStyles: {
+            fontSize: 8.5,
+            textColor: [30, 41, 59],
+            lineColor: [148, 163, 184],
+            lineWidth: 0.4
+          },
+          alternateRowStyles: {
+            fillColor: [248, 250, 252]
+          },
+          columnStyles: {
+            0: { cellWidth: 10, halign: "center" }
+          },
+          margin: { left: 14, right: 14 },
+          didParseCell: (cellData) => {
+            if (cellData.section === "body" && cellData.column.index === headers.length - 1) {
+              const statusText = String(cellData.cell.raw).trim();
+              if (statusText === "Hadir") {
+                cellData.cell.styles.textColor = [16, 185, 129];
+                cellData.cell.styles.fontStyle = "bold";
+              } else if (statusText === "Absen" || statusText === "Alfa") {
+                cellData.cell.styles.textColor = [239, 68, 68];
+                cellData.cell.styles.fontStyle = "bold";
+              } else if (statusText === "Terlambat" || statusText === "Sakit" || statusText === "Izin") {
+                cellData.cell.styles.textColor = [245, 158, 11];
+                cellData.cell.styles.fontStyle = "bold";
+              }
+            }
+          }
+        });
+
+        currentY = (doc as any).lastAutoTable.finalY + 12;
+      });
+
+      doc.save(`Laporan_Presensi_Guru_${startDate}_to_${endDate}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat mencetak PDF");
     } finally {
       setSaving(false);
     }
@@ -203,14 +378,21 @@ export default function TeacherAttendancePage() {
     <div className="flex flex-col gap-8">
       {/* Header bar */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold text-[#1e293b]">Presensi Guru</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Pantau dan kelola kehadiran guru.
-            {periodName && (
-              <span className="ml-2 font-semibold text-blue-600">Periode: {periodName}</span>
-            )}
-          </p>
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/absensi">
+            <button className="p-2 hover:bg-slate-100 rounded-xl transition-all">
+              <ChevronLeft className="w-5 h-5 text-slate-600" />
+            </button>
+          </Link>
+          <div>
+            <h1 className="text-3xl font-extrabold text-[#1e293b]">Presensi Guru</h1>
+            <p className="text-sm text-slate-400 mt-1">
+              Pantau dan kelola kehadiran guru.
+              {periodName && (
+                <span className="ml-2 font-semibold text-blue-600">Periode: {periodName}</span>
+              )}
+            </p>
+          </div>
         </div>
 
         {/* Top actions */}
@@ -238,7 +420,29 @@ export default function TeacherAttendancePage() {
             {saving ? "Menyimpan..." : "Simpan Presensi"}
           </Button>
 
-          <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]">
+          {/* Rekap Date Range */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-500 shadow-sm">
+            <span>Rekap Mulai:</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="bg-transparent border-none outline-none text-slate-700 font-bold text-[11px] cursor-pointer"
+            />
+            <span>s/d:</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="bg-transparent border-none outline-none text-slate-700 font-bold text-[11px] cursor-pointer"
+            />
+          </div>
+
+          <Button
+            onClick={handlePrintPDF}
+            disabled={saving || !periodId}
+            className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]"
+          >
             <Download className="w-4 h-4" />
             Download Rekap
           </Button>
@@ -272,7 +476,6 @@ export default function TeacherAttendancePage() {
 
       {/* Main Table Card */}
       <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.02)] overflow-hidden">
-
         {/* Search & Filter Header */}
         <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <h2 className="text-lg font-extrabold text-slate-800">Data Kehadiran Guru</h2>
@@ -304,19 +507,19 @@ export default function TeacherAttendancePage() {
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-semibold">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-16 text-center text-slate-400 font-semibold">
+                  <td colSpan={6} className="py-16 text-center text-slate-400 font-semibold">
                     Memuat data guru...
                   </td>
                 </tr>
               ) : !periodId ? (
                 <tr>
-                  <td colSpan={5} className="py-16 text-center text-slate-400 font-semibold">
+                  <td colSpan={6} className="py-16 text-center text-slate-400 font-semibold">
                     Pilih periode akademik pada topbar header terlebih dahulu.
                   </td>
                 </tr>
               ) : paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-16 text-center text-slate-400 font-semibold">
+                  <td colSpan={6} className="py-16 text-center text-slate-400 font-semibold">
                     Tidak ada data guru pada periode ini.
                   </td>
                 </tr>

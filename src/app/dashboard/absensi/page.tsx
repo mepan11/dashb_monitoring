@@ -17,7 +17,8 @@ import {
   BookOpen,
   Award,
   ChevronRight,
-  Printer
+  Printer,
+  Activity
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
@@ -38,6 +39,22 @@ export default function AbsensiPage() {
   // Navigation Tabs
   const [activeTab, setActiveTab] = useState<"monitoring" | "presensi" | "riwayat">("monitoring");
   const [periodId, setPeriodId] = useState<string>("");
+
+  const formatToDatetimeLocal = (val: string, defaultTime: string) => {
+    if (!selectedDate) return "";
+    if (!val) return `${selectedDate}T${defaultTime}`;
+    if (val.includes("T")) return val.slice(0, 16);
+    if (/^\d{2}:\d{2}/.test(val)) {
+      return `${selectedDate}T${val.slice(0, 5)}`;
+    }
+    if (val.includes(" ")) {
+      const parts = val.split(" ");
+      if (parts[0].includes("-")) {
+        return `${parts[0]}T${parts[1]?.slice(0, 5) || defaultTime}`;
+      }
+    }
+    return `${selectedDate}T${defaultTime}`;
+  };
 
   useEffect(() => {
     const cached = localStorage.getItem("active_period_id") || "";
@@ -80,8 +97,10 @@ export default function AbsensiPage() {
   const [teacherRate, setTeacherRate] = useState("—%");
   const [coachRate, setCoachRate] = useState("—%");
   const [studentRate, setStudentRate] = useState("—%");
+  const [ekskulRate, setEkskulRate] = useState("—%");
   const [chartDataList, setChartDataList] = useState<any[]>([]);
   const [recentLogs, setRecentLogs] = useState<RecentAttendance[]>([]);
+  const [dashboardPeriodName, setDashboardPeriodName] = useState("—");
 
   // --- DATABASE SELECT OPTIONS STATES ---
   const [classes, setClasses] = useState<any[]>([]);
@@ -160,16 +179,16 @@ export default function AbsensiPage() {
           setTeacherRate(data.data.rates.teacher);
           setCoachRate(data.data.rates.coach);
           setStudentRate(data.data.rates.student);
+          setEkskulRate(data.data.rates.ekskul || "—%");
           setChartDataList(data.data.chart);
           setRecentLogs(data.data.recent);
+          setDashboardPeriodName(data.data.periodName || "—");
         }
       } catch (err) {
         console.error("Error loading dashboard stats:", err);
       }
     }
-    if (periodId) {
-      fetchStats();
-    }
+    fetchStats();
   }, [activeTab, periodId]);
 
   // Fetch Master Data (Classes and Extracurriculars)
@@ -204,11 +223,7 @@ export default function AbsensiPage() {
         const json = await res.json();
         if (json.success) {
           setSubjects(json.data);
-          if (json.data.length > 0) {
-            setSelectedSubjectId(String(json.data[0].id));
-          } else {
-            setSelectedSubjectId("");
-          }
+          setSelectedSubjectId("");
         }
       } catch (err) {
         console.error("Error loading subjects:", err);
@@ -219,7 +234,7 @@ export default function AbsensiPage() {
 
   // Fetch students (with attendance) when class, subject, date, or period changes
   useEffect(() => {
-    if (!selectedClassId || !selectedDate || !periodId) {
+    if (!selectedClassId || !selectedSubjectId || !selectedDate || !periodId) {
       setStudents([]);
       return;
     }
@@ -250,6 +265,7 @@ export default function AbsensiPage() {
   useEffect(() => {
     if (!selectedRiwayatClassId) {
       setRiwayatSubjects([]);
+      setSelectedRiwayatSubjectId("");
       return;
     }
     async function fetchRiwayatSubjects() {
@@ -258,6 +274,7 @@ export default function AbsensiPage() {
         const data = await res.json();
         if (data.success) {
           setRiwayatSubjects(data.data);
+          setSelectedRiwayatSubjectId("");
         }
       } catch (err) {
         console.error("Error loading class subjects:", err);
@@ -362,7 +379,8 @@ export default function AbsensiPage() {
       let newUpdates = { ...updates };
       if (updates.status) {
         if (updates.status === "Hadir") {
-          // times will be captured via liveTime at save time
+          newUpdates.checkInTime = current.checkInTime || `${selectedDate}T07:00`;
+          newUpdates.checkOutTime = current.checkOutTime || `${selectedDate}T14:00`;
         } else {
           // Izin / Absen: clear times
           newUpdates.checkInTime = "";
@@ -383,7 +401,8 @@ export default function AbsensiPage() {
       let newUpdates = { ...updates };
       if (updates.status) {
         if (updates.status === "Hadir") {
-          // times will be captured via liveTime at save time
+          newUpdates.checkInTime = current.checkInTime || `${selectedDate}T15:00`;
+          newUpdates.checkOutTime = current.checkOutTime || `${selectedDate}T17:00`;
         } else {
           // Izin / Absen: clear times
           newUpdates.checkInTime = "";
@@ -445,20 +464,18 @@ export default function AbsensiPage() {
         status
       }));
     } else if (presensiType === "guru") {
-      const snapshotTime = liveTime; // Capture current real-time at moment of saving
       payload.attendance = Object.entries(teacherAttMap).map(([teacherId, val]) => ({
         teacherId: parseInt(teacherId),
         status: val.status,
-        checkInTime: val.status === "Hadir" ? `${snapshotTime} WIB` : "",
-        checkOutTime: val.status === "Hadir" ? `${snapshotTime} WIB` : ""
+        checkInTime: val.status === "Hadir" ? val.checkInTime : "",
+        checkOutTime: val.status === "Hadir" ? val.checkOutTime : ""
       }));
     } else if (presensiType === "coach") {
-      const snapshotTime = liveTime; // Capture current real-time at moment of saving
       payload.attendance = Object.entries(coachAttMap).map(([coachId, val]) => ({
         coachId: parseInt(coachId),
         status: val.status,
-        checkInTime: val.status === "Hadir" ? `${snapshotTime} WIB` : "",
-        checkOutTime: val.status === "Hadir" ? `${snapshotTime} WIB` : ""
+        checkInTime: val.status === "Hadir" ? val.checkInTime : "",
+        checkOutTime: val.status === "Hadir" ? val.checkOutTime : ""
       }));
     } else if (presensiType === "ekskul") {
       if (!selectedEkskulId) {
@@ -574,10 +591,16 @@ export default function AbsensiPage() {
         setSaving(false);
         return;
       }
+      if (!selectedRiwayatSubjectId) {
+        alert("Pilih Mata Pelajaran terlebih dahulu");
+        setSaving(false);
+        return;
+      }
       queryParams.append("classId", selectedRiwayatClassId);
+      queryParams.append("classSubjectId", selectedRiwayatSubjectId);
       const cls = classes.find((c) => c.id === parseInt(selectedRiwayatClassId));
       titleText = `Laporan Kehadiran Siswa Kelas ${cls?.name || ""}`;
-      const subj = riwayatSubjects.find((s) => s.id === selectedRiwayatSubjectId);
+      const subj = riwayatSubjects.find((s) => String(s.classSubjectId) === String(selectedRiwayatSubjectId));
       if (subj) {
         subTitleText = `Mata Pelajaran: ${subj.name} (${subj.code})`;
       }
@@ -786,6 +809,21 @@ export default function AbsensiPage() {
     }
   };
 
+  // Hitung rata-rata tertinggi
+  let highestMonth = "Desember";
+  let highestRate = "97.5%";
+  if (chartDataList && chartDataList.length > 0) {
+    let maxRate = 0;
+    chartDataList.forEach((c: any) => {
+      const currentRate = parseFloat(c.studentHeight.replace("%", ""));
+      if (currentRate > maxRate) {
+        maxRate = currentRate;
+        highestMonth = c.month;
+        highestRate = c.studentHeight;
+      }
+    });
+  }
+
   return (
     <div className="flex flex-col gap-8">
       {/* Navigation Title Bar */}
@@ -809,12 +847,8 @@ export default function AbsensiPage() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 text-[#2563eb] rounded-xl text-xs font-bold border border-blue-100 shadow-sm">
               <Calendar className="w-4 h-4" />
-              12 Okt 2023 - Hari Ini
+              {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} - Hari Ini
             </div>
-            <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]">
-              <Download className="w-4 h-4" />
-              Download Rekapitulasi
-            </Button>
           </div>
         )}
       </div>
@@ -830,7 +864,7 @@ export default function AbsensiPage() {
         >
           Dashboard Monitoring Kehadiran
         </button>
-        <button
+        {/* <button
           onClick={() => setActiveTab("presensi")}
           className={`py-4 px-6 font-bold text-sm border-b-2 transition-all ${activeTab === "presensi"
               ? "border-blue-600 text-blue-600"
@@ -838,7 +872,7 @@ export default function AbsensiPage() {
             }`}
         >
           Lakukan Presensi
-        </button>
+        </button> */}
         <button
           onClick={() => setActiveTab("riwayat")}
           className={`py-4 px-6 font-bold text-sm border-b-2 transition-all ${activeTab === "riwayat"
@@ -854,7 +888,7 @@ export default function AbsensiPage() {
       {activeTab === "monitoring" && (
         <>
           {/* KPI Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Presensi Guru */}
             <Link href="/dashboard/absensi/guru" className="block hover:opacity-95 transition-all">
               <div className="bg-white border border-slate-100 p-6 rounded-2xl flex flex-col gap-4 shadow-[0_4px_20px_rgb(0,0,0,0.02)] h-full">
@@ -910,6 +944,24 @@ export default function AbsensiPage() {
                 </div>
               </div>
             </Link>
+
+            {/* Presensi Ekskul */}
+            <Link href="/dashboard/absensi/ekskul" className="block hover:opacity-95 transition-all">
+              <div className="bg-white border border-slate-100 p-6 rounded-2xl flex flex-col gap-4 shadow-[0_4px_20px_rgb(0,0,0,0.02)] h-full">
+                <div className="flex justify-between items-start">
+                  <div className="p-3 rounded-lg bg-purple-50 text-purple-600">
+                    <Activity className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-slate-400">Presensi Ekskul</span>
+                  <span className="text-3xl font-extrabold text-slate-800 mt-2">{ekskulRate}</span>
+                  <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 mt-3">
+                    <span>— Stabil dalam 7 hari</span>
+                  </div>
+                </div>
+              </div>
+            </Link>
           </div>
 
           {/* Monthly Attendance Trend Card */}
@@ -931,14 +983,9 @@ export default function AbsensiPage() {
                     Staf/Guru
                   </div>
                 </div>
-                <select
-                  value={semesterFilter}
-                  onChange={(e) => setSemesterFilter(e.target.value)}
-                  className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
-                >
-                  <option>Semester Ganjil 2023</option>
-                  <option>Semester Genap 2024</option>
-                </select>
+                <span className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-700">
+                  {dashboardPeriodName}
+                </span>
               </div>
             </div>
 
@@ -984,7 +1031,7 @@ export default function AbsensiPage() {
               <div className="flex items-center gap-3 text-xs text-slate-600 leading-relaxed">
                 <Info className="w-5 h-5 text-[#2563eb] shrink-0" />
                 <span>
-                  Rata-rata kehadiran tertinggi terjadi pada bulan <strong>Desember (97.5%)</strong>.
+                  Rata-rata kehadiran tertinggi terjadi pada bulan <strong>{highestMonth} ({highestRate})</strong>.
                   Persiapkan strategi untuk menjaga tren ini.
                 </span>
               </div>
@@ -1081,7 +1128,7 @@ export default function AbsensiPage() {
       )}
 
       {/* TAB CONTENT 2: LAKUKAN PRESENSI */}
-      {activeTab === "presensi" && (
+      {false && activeTab === "presensi" && (
         <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.02)] p-6">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-slate-100 pb-6 mb-6">
             {/* Presensi Sub-navigation */}
@@ -1178,7 +1225,11 @@ export default function AbsensiPage() {
                 </div>
 
                 {/* Students Checklist Table */}
-                {selectedClassId && students.length > 0 ? (
+                {!selectedClassId || !selectedSubjectId ? (
+                  <div className="py-12 text-center text-slate-400 font-bold border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                    Silakan pilih Kelas dan Mata Pelajaran terlebih dahulu untuk menampilkan daftar siswa.
+                  </div>
+                ) : students.length > 0 ? (
                   <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm mt-4">
                     <table className="w-full text-left border-collapse">
                       <thead>
@@ -1232,11 +1283,9 @@ export default function AbsensiPage() {
                     </table>
                   </div>
                 ) : (
-                  selectedClassId && (
-                    <div className="py-12 text-center text-slate-400 font-bold">
-                      Tidak ada siswa dalam kelas ini.
-                    </div>
-                  )
+                  <div className="py-12 text-center text-slate-400 font-bold border border-slate-100 rounded-2xl bg-white shadow-sm mt-4">
+                    Tidak ada siswa dalam kelas ini.
+                  </div>
                 )}
               </div>
             )}
@@ -1289,24 +1338,28 @@ export default function AbsensiPage() {
                                 {state.status === "Izin" || state.status === "Absen" ? (
                                   <span className="text-slate-300 font-bold text-sm">—</span>
                                 ) : (
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-                                    <span className="font-mono font-extrabold text-[#2563eb] text-sm tracking-widest">
-                                      {liveSeconds || "--:--:--"}
-                                    </span>
-                                  </div>
+                                  <input
+                                    type="datetime-local"
+                                    value={formatToDatetimeLocal(state.checkInTime, "07:00")}
+                                    onChange={(e) =>
+                                      handleTeacherAttChange(teacher.id, { checkInTime: e.target.value })
+                                    }
+                                    className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white text-slate-800 transition-all font-semibold"
+                                  />
                                 )}
                               </td>
                               <td className="py-4 px-6">
                                 {state.status === "Izin" || state.status === "Absen" ? (
                                   <span className="text-slate-300 font-bold text-sm">—</span>
                                 ) : (
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-                                    <span className="font-mono font-extrabold text-[#2563eb] text-sm tracking-widest">
-                                      {liveSeconds || "--:--:--"}
-                                    </span>
-                                  </div>
+                                  <input
+                                    type="datetime-local"
+                                    value={formatToDatetimeLocal(state.checkOutTime, "14:00")}
+                                    onChange={(e) =>
+                                      handleTeacherAttChange(teacher.id, { checkOutTime: e.target.value })
+                                    }
+                                    className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white text-slate-800 transition-all font-semibold"
+                                  />
                                 )}
                               </td>
                               <td className="py-4 px-6">
@@ -1393,24 +1446,28 @@ export default function AbsensiPage() {
                                 {state.status === "Izin" || state.status === "Absen" ? (
                                   <span className="text-slate-300 font-bold text-sm">—</span>
                                 ) : (
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
-                                    <span className="font-mono font-extrabold text-emerald-600 text-sm tracking-widest">
-                                      {liveSeconds || "--:--:--"}
-                                    </span>
-                                  </div>
+                                  <input
+                                    type="datetime-local"
+                                    value={formatToDatetimeLocal(state.checkInTime, "15:00")}
+                                    onChange={(e) =>
+                                      handleCoachAttChange(coach.id, { checkInTime: e.target.value })
+                                    }
+                                    className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white text-slate-800 transition-all font-semibold"
+                                  />
                                 )}
                               </td>
                               <td className="py-4 px-6">
                                 {state.status === "Izin" || state.status === "Absen" ? (
                                   <span className="text-slate-300 font-bold text-sm">—</span>
                                 ) : (
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
-                                    <span className="font-mono font-extrabold text-emerald-600 text-sm tracking-widest">
-                                      {liveSeconds || "--:--:--"}
-                                    </span>
-                                  </div>
+                                  <input
+                                    type="datetime-local"
+                                    value={formatToDatetimeLocal(state.checkOutTime, "17:00")}
+                                    onChange={(e) =>
+                                      handleCoachAttChange(coach.id, { checkOutTime: e.target.value })
+                                    }
+                                    className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white text-slate-800 transition-all font-semibold"
+                                  />
                                 )}
                               </td>
                               <td className="py-4 px-6">
@@ -1650,14 +1707,14 @@ export default function AbsensiPage() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-500">Pilih Mata Pelajaran (Opsional)</label>
+                  <label className="text-xs font-bold text-slate-500">Pilih Mata Pelajaran</label>
                   <select
                     value={selectedRiwayatSubjectId}
                     onChange={(e) => setSelectedRiwayatSubjectId(e.target.value)}
                     disabled={!selectedRiwayatClassId || riwayatSubjects.length === 0}
                     className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-600 disabled:opacity-50"
                   >
-                    <option value="">-- Semua Mata Pelajaran --</option>
+                    <option value="">-- Pilih Mata Pelajaran --</option>
                     {riwayatSubjects.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name} ({s.code}) - {s.teacher}

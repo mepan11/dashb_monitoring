@@ -13,8 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Save,
-  BookOpen,
-  AlertTriangle
+  Award,
+  BookOpen
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import jsPDF from "jspdf";
@@ -24,15 +24,15 @@ interface StudentRow {
   id: string;
   name: string;
   nisn: string;
+  classLabel?: string;
   initials: string;
   status: string | null;
 }
 
-export default function StudentAttendanceSubpage() {
+export default function ExtracurricularAttendancePage() {
   const [periodId, setPeriodId] = useState("");
   const [periodName, setPeriodName] = useState("");
-  const [classes, setClasses] = useState<any[]>([]);
-  const [subjects, setSubjects] = useState<any[]>([]);
+  const [extracurriculars, setExtracurriculars] = useState<any[]>([]);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -41,8 +41,7 @@ export default function StudentAttendanceSubpage() {
   const LIMIT = 15;
 
   // Selected filters
-  const [selectedClassId, setSelectedClassId] = useState("");
-  const [selectedSubjectId, setSelectedSubjectId] = useState("");
+  const [selectedEkskulId, setSelectedEkskulId] = useState("");
 
   // Attendance state: map of studentId -> status
   const [studentAttMap, setStudentAttMap] = useState<Record<string, string>>({});
@@ -96,48 +95,27 @@ export default function StudentAttendanceSubpage() {
     }
   };
 
-  // Fetch Classes
+  // Fetch Extracurriculars
   useEffect(() => {
     if (!periodId) return;
-    fetch(`/api/classes?period_id=${periodId}`)
+    fetch(`/api/extracurriculars?period_id=${periodId}`)
       .then((r) => r.json())
       .then((json) => {
-        if (json.success) setClasses(json.data);
+        if (json.success) setExtracurriculars(json.data);
       })
-      .catch((err) => console.error("Error fetching classes:", err));
+      .catch((err) => console.error("Error fetching extracurriculars:", err));
   }, [periodId]);
-
-  // Fetch Subjects when selectedClassId changes
-  useEffect(() => {
-    if (!selectedClassId || !periodId) {
-      setSubjects([]);
-      setSelectedSubjectId("");
-      return;
-    }
-    fetch(`/api/classes/${selectedClassId}/subjects?period_id=${periodId}`)
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.success) {
-          setSubjects(json.data);
-          setSelectedSubjectId(""); // force manual selection
-        }
-      })
-      .catch((err) => console.error("Error fetching subjects:", err));
-  }, [selectedClassId, periodId]);
 
   // Fetch Students & existing attendance
   const fetchStudents = useCallback(async () => {
-    if (!selectedClassId || !selectedSubjectId || !selectedDate || !periodId) {
+    if (!selectedEkskulId || !selectedDate || !periodId) {
       setStudents([]);
       return;
     }
     setLoading(true);
     try {
-      const subjectObj = subjects.find((s) => String(s.id) === String(selectedSubjectId));
-      const classSubjectId = subjectObj ? subjectObj.classSubjectId : "";
-
       const res = await fetch(
-        `/api/absensi?type=students&date=${selectedDate}&classId=${selectedClassId}&classSubjectId=${classSubjectId}&period_id=${periodId}`
+        `/api/absensi?type=ekskul&date=${selectedDate}&extracurricularId=${selectedEkskulId}&period_id=${periodId}`
       );
       const json = await res.json();
       if (json.success) {
@@ -149,11 +127,11 @@ export default function StudentAttendanceSubpage() {
         setStudentAttMap(initialMap);
       }
     } catch (err) {
-      console.error("Failed to fetch students:", err);
+      console.error("Failed to fetch ekskul students:", err);
     } finally {
       setLoading(false);
     }
-  }, [selectedClassId, selectedSubjectId, selectedDate, periodId, subjects]);
+  }, [selectedEkskulId, selectedDate, periodId]);
 
   useEffect(() => {
     fetchStudents();
@@ -164,12 +142,9 @@ export default function StudentAttendanceSubpage() {
   };
 
   const handleSaveAttendance = async () => {
-    if (!periodId || !selectedClassId || !selectedSubjectId) return;
+    if (!periodId || !selectedEkskulId) return;
     setSaving(true);
     try {
-      const subjectObj = subjects.find((s) => String(s.id) === String(selectedSubjectId));
-      const classSubjectId = subjectObj ? subjectObj.classSubjectId : "";
-
       const attendanceRecords = students.map((s) => ({
         studentId: s.id,
         status: studentAttMap[s.id] || "Hadir",
@@ -179,17 +154,16 @@ export default function StudentAttendanceSubpage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "students",
+          type: "ekskul",
           date: selectedDate,
           periodId,
-          classId: selectedClassId,
-          classSubjectId,
+          extracurricularId: selectedEkskulId,
           attendance: attendanceRecords,
         }),
       });
       const json = await res.json();
       if (res.ok && json.success) {
-        alert("Data presensi siswa berhasil disimpan!");
+        alert("Data presensi ekskul berhasil disimpan!");
         fetchStudents();
       } else {
         alert(json.message || "Gagal menyimpan presensi");
@@ -202,8 +176,8 @@ export default function StudentAttendanceSubpage() {
   };
 
   const handlePrintPDF = async () => {
-    if (!selectedClassId || !selectedSubjectId) {
-      alert("Pilih Kelas dan Mata Pelajaran terlebih dahulu");
+    if (!selectedEkskulId) {
+      alert("Pilih Kegiatan Ekstrakurikuler terlebih dahulu");
       return;
     }
     if (!startDate || !endDate) {
@@ -212,15 +186,11 @@ export default function StudentAttendanceSubpage() {
     }
     setSaving(true);
     try {
-      const subjectObj = subjects.find((s) => String(s.id) === String(selectedSubjectId));
-      const classSubjectId = subjectObj ? subjectObj.classSubjectId : "";
-
       let queryParams = new URLSearchParams({
-        type: "siswa",
+        type: "ekskul",
         startDate,
         endDate,
-        classId: selectedClassId,
-        classSubjectId
+        extracurricularId: selectedEkskulId
       });
       if (periodId) {
         queryParams.append("period_id", periodId);
@@ -264,24 +234,20 @@ export default function StudentAttendanceSubpage() {
       doc.setLineWidth(0.5);
       doc.line(14, 28, 196, 28);
 
-      const cls = classes.find((c) => String(c.id) === String(selectedClassId));
+      const eks = extracurriculars.find((e) => String(e.id) === String(selectedEkskulId));
       doc.setFont("Helvetica", "bold");
       doc.setFontSize(13);
       doc.setTextColor(37, 99, 235);
-      doc.text(`Laporan Kehadiran Siswa Kelas ${cls?.name || ""}`, 14, 38);
+      doc.text(`Laporan Kehadiran Ekskul ${eks?.name || ""}`, 14, 38);
 
       doc.setFontSize(9);
       doc.setFont("Helvetica", "normal");
       doc.setTextColor(71, 85, 105);
 
-      if (subjectObj) {
-        doc.text(`Mata Pelajaran: ${subjectObj.name} (${subjectObj.code})`, 14, 44);
-      }
-
       const formattedPeriod = `Periode: ${formatIndonesianDate(startDate)} s/d ${formatIndonesianDate(endDate)}`;
-      doc.text(formattedPeriod, 14, 50);
+      doc.text(formattedPeriod, 14, 44);
 
-      let currentY = 56;
+      let currentY = 50;
 
       sortedDates.forEach((date) => {
         if (currentY > 240) {
@@ -296,10 +262,11 @@ export default function StudentAttendanceSubpage() {
         currentY += 4;
 
         const dateRecords = groupedByDate[date];
-        const headers = ["No", "Nama Siswa", "NISN", "Status Kehadiran"];
+        const headers = ["No", "Nama Siswa", "Kelas", "NISN", "Status"];
         const rows = dateRecords.map((r: any, idx: number) => [
           idx + 1,
           r.name,
+          r.classLabel || "—",
           r.nisn,
           r.attendanceStatus
         ]);
@@ -348,7 +315,7 @@ export default function StudentAttendanceSubpage() {
         currentY = (doc as any).lastAutoTable.finalY + 12;
       });
 
-      doc.save(`Laporan_Presensi_Siswa_${startDate}_to_${endDate}.pdf`);
+      doc.save(`Laporan_Presensi_Ekskul_${startDate}_to_${endDate}.pdf`);
     } catch (err) {
       console.error(err);
       alert("Terjadi kesalahan saat mencetak PDF");
@@ -374,7 +341,7 @@ export default function StudentAttendanceSubpage() {
 
   const stats = [
     {
-      title: "Total Siswa",
+      title: "Total Anggota Ekskul",
       value: totalStudents,
       icon: Users,
       iconBg: "bg-blue-50",
@@ -418,9 +385,9 @@ export default function StudentAttendanceSubpage() {
             </button>
           </Link>
           <div>
-            <h1 className="text-3xl font-extrabold text-[#1e293b]">Presensi Siswa</h1>
+            <h1 className="text-3xl font-extrabold text-[#1e293b]">Presensi Ekskul</h1>
             <p className="text-sm text-slate-400 mt-1">
-              Pantau dan kelola kehadiran siswa per-kelas dan subjek mata pelajaran.
+              Pantau dan kelola kehadiran siswa di kegiatan ekstrakurikuler.
               {periodName && (
                 <span className="ml-2 font-semibold text-blue-600">Periode: {periodName}</span>
               )}
@@ -446,7 +413,7 @@ export default function StudentAttendanceSubpage() {
 
           <Button
             onClick={handleSaveAttendance}
-            disabled={saving || !periodId || !selectedClassId || !selectedSubjectId}
+            disabled={saving || !periodId || !selectedEkskulId}
             className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
@@ -473,7 +440,7 @@ export default function StudentAttendanceSubpage() {
 
           <Button
             onClick={handlePrintPDF}
-            disabled={saving || !periodId || !selectedClassId || !selectedSubjectId}
+            disabled={saving || !periodId || !selectedEkskulId}
             className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8] disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
@@ -508,47 +475,28 @@ export default function StudentAttendanceSubpage() {
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-white border border-slate-100 p-5 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.02)] grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-bold text-slate-500">Pilih Kelas</label>
-          <select
-            value={selectedClassId}
-            onChange={(e) => { setSelectedClassId(e.target.value); setCurrentPage(1); }}
-            className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
-          >
-            <option value="">-- Pilih Kelas --</option>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} (Homeroom: {c.homeroomTeacher || "—"})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-bold text-slate-500">Pilih Mata Pelajaran</label>
-          <select
-            value={selectedSubjectId}
-            onChange={(e) => { setSelectedSubjectId(e.target.value); setCurrentPage(1); }}
-            disabled={!selectedClassId || subjects.length === 0}
-            className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-600 disabled:opacity-50"
-          >
-            <option value="">-- Pilih Mata Pelajaran --</option>
-            {subjects.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.code}) - {s.teacher}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="bg-white border border-slate-100 p-5 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-2">
+        <label className="text-xs font-bold text-slate-500">Pilih Kegiatan Ekstrakurikuler</label>
+        <select
+          value={selectedEkskulId}
+          onChange={(e) => { setSelectedEkskulId(e.target.value); setCurrentPage(1); }}
+          className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+        >
+          <option value="">-- Pilih Ekstrakurikuler --</option>
+          {extracurriculars.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Main Table Card */}
       <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.02)] overflow-hidden">
         {/* Search Header */}
         <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row items-neutral sm:items-center justify-between gap-4">
-          <h2 className="text-lg font-extrabold text-slate-800">Daftar Kehadiran Siswa</h2>
-          {selectedClassId && selectedSubjectId && (
+          <h2 className="text-lg font-extrabold text-slate-800">Daftar Kehadiran Anggota Ekskul</h2>
+          {selectedEkskulId && (
             <div className="flex items-center gap-2 bg-[#f4f7fc] border border-slate-100/50 rounded-lg px-3 py-2 w-full sm:w-64">
               <Search className="w-4 h-4 text-slate-400 shrink-0" />
               <input
@@ -563,18 +511,18 @@ export default function StudentAttendanceSubpage() {
         </div>
 
         {/* Content Render based on Filter */}
-        {!selectedClassId || !selectedSubjectId ? (
+        {!selectedEkskulId ? (
           <div className="py-20 text-center text-slate-400 font-bold border-t border-slate-100 bg-slate-50/50">
-            <BookOpen className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-            Silakan pilih Kelas dan Mata Pelajaran terlebih dahulu untuk menampilkan daftar siswa.
+            <Award className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+            Silakan pilih Kegiatan Ekstrakurikuler terlebih dahulu untuk menampilkan daftar siswa.
           </div>
         ) : loading ? (
           <div className="py-20 text-center text-slate-400 font-semibold">
-            Memuat data siswa...
+            Memuat data siswa ekskul...
           </div>
         ) : paginated.length === 0 ? (
           <div className="py-20 text-center text-slate-400 font-semibold">
-            Tidak ada data siswa dalam kelas ini untuk mata pelajaran terpilih.
+            Tidak ada siswa terdaftar dalam ekstrakurikuler ini untuk periode akademik terpilih.
           </div>
         ) : (
           <>
@@ -583,6 +531,7 @@ export default function StudentAttendanceSubpage() {
                 <thead>
                   <tr className="border-b border-slate-100 bg-[#fafbfc] text-[10px] font-extrabold text-slate-400 tracking-wider">
                     <th className="py-4 px-6">NAMA SISWA</th>
+                    <th className="py-4 px-6">KELAS</th>
                     <th className="py-4 px-6">NISN</th>
                     <th className="py-4 px-6">STATUS KEHADIRAN</th>
                   </tr>
@@ -600,6 +549,7 @@ export default function StudentAttendanceSubpage() {
                             <span className="font-bold text-slate-800">{row.name}</span>
                           </div>
                         </td>
+                        <td className="py-4 px-6 text-slate-500">{row.classLabel || "—"}</td>
                         <td className="py-4 px-6 text-slate-500">{row.nisn || "—"}</td>
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-2">

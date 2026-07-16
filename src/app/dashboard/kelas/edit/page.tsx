@@ -48,7 +48,7 @@ function EditKelasContent() {
     async function loadData() {
       setLoading(true);
       try {
-        const classRes = await fetch(`/api/classes/${id}`);
+        const classRes = await fetch(`/api/classes/${id}?period_id=${periodId}`);
         const classJson = await classRes.json();
         let currentHomeroomTeacherId = "";
 

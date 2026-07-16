@@ -184,7 +184,7 @@ export async function POST(
     const computedEndTime = firstSched && typeof firstSched === "object" ? firstSched.endTime : (endTime || "");
 
     // Insert relasi baru
-    await db.query(
+    const [insertRes]: any = await db.query(
       `INSERT INTO class_subjects (class_period_id, subject_period_id, teacher_period_id, schedule_day, start_time, end_time)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [
@@ -196,6 +196,19 @@ export async function POST(
         computedEndTime
       ]
     );
+    const newClassSubjectId = insertRes.insertId;
+
+    // Auto-sync master tugas yang sudah ada ke kelas mata pelajaran yang baru ini
+    const [tasks]: any = await db.query(
+      "SELECT id FROM task_names WHERE subject_id = ?",
+      [subjectId]
+    );
+    for (const t of tasks) {
+      await db.query(
+        "INSERT IGNORE INTO subject_assignments (class_subject_id, task_name_id) VALUES (?, ?)",
+        [newClassSubjectId, t.id]
+      );
+    }
 
     return NextResponse.json({ success: true, message: "Mata pelajaran berhasil ditambahkan ke kelas" });
   } catch (error: any) {

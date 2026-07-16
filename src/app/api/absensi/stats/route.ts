@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const url = new URL(request.url);
+    const periodId = url.searchParams.get("period_id");
+
+    let activePeriodId = periodId;
+    if (!activePeriodId || activePeriodId === "undefined") {
+      const [activePeriod]: any = await db.query(
+        "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+      );
+      activePeriodId = activePeriod[0]?.id || 1;
+    }
     // 1. Calculate latest attendance rates for KPI Cards
     // 1a. Teachers
     const [latestTeacherDateRows]: any = await db.query("SELECT MAX(date) AS d FROM teacher_attendance");
@@ -55,6 +65,32 @@ export async function GET() {
       );
       if (rows[0] && rows[0].total > 0) {
         studentRate = Math.round((rows[0].present / rows[0].total) * 1000) / 10;
+      }
+    }
+
+    // 1d. Extracurriculars
+    const [latestEkskulDateRows]: any = await db.query(
+      `SELECT MAX(sa.date) AS d 
+       FROM student_attendance sa
+       JOIN student_periods sp ON sa.student_period_id = sp.id
+       JOIN extracurricular_students es ON es.student_period_id = sp.id
+       WHERE sa.class_subject_id IS NULL`
+    );
+    const latestEkskulDate = latestEkskulDateRows[0]?.d;
+    let ekskulRate = 100.0;
+    if (latestEkskulDate) {
+      const [rows]: any = await db.query(
+        `SELECT 
+           SUM(CASE WHEN sa.status = 'Hadir' THEN 1 ELSE 0 END) AS present,
+           COUNT(*) AS total
+         FROM student_attendance sa
+         JOIN student_periods sp ON sa.student_period_id = sp.id
+         JOIN extracurricular_students es ON es.student_period_id = sp.id
+         WHERE sa.class_subject_id IS NULL AND sa.date = ?`,
+        [latestEkskulDate]
+      );
+      if (rows[0] && rows[0].total > 0) {
+        ekskulRate = Math.round((rows[0].present / rows[0].total) * 1000) / 10;
       }
     }
 
@@ -120,7 +156,8 @@ export async function GET() {
           sa.date,
           sa.created_at
         FROM student_attendance sa
-        JOIN students s ON sa.student_id = s.id
+        JOIN student_periods sp ON sa.student_period_id = sp.id
+        JOIN students s ON sp.student_id = s.id
       )
       UNION ALL
       (
@@ -133,7 +170,8 @@ export async function GET() {
           ta.date,
           ta.created_at
         FROM teacher_attendance ta
-        JOIN teachers t ON ta.teacher_id = t.id
+        JOIN teacher_periods tp ON ta.teacher_period_id = tp.id
+        JOIN teachers t ON tp.teacher_id = t.id
       )
       UNION ALL
       (
@@ -146,7 +184,8 @@ export async function GET() {
           ca.date,
           ca.created_at
         FROM coach_attendance ca
-        JOIN coaches c ON ca.coach_id = c.id
+        JOIN coach_periods cp ON ca.coach_period_id = cp.id
+        JOIN coaches c ON cp.coach_id = c.id
       )
       ORDER BY date DESC, created_at DESC
       LIMIT 8`
@@ -168,16 +207,26 @@ export async function GET() {
       };
     });
 
+    const [periodRows]: any = await db.query(
+      "SELECT academic_year, semester FROM academic_periods WHERE id = ?",
+      [activePeriodId]
+    );
+    const periodName = periodRows[0] 
+      ? `TA ${periodRows[0].academic_year} - ${periodRows[0].semester}` 
+      : "—";
+
     return NextResponse.json({
       success: true,
       data: {
         rates: {
           teacher: `${teacherRate}%`,
           coach: `${coachRate}%`,
-          student: `${studentRate}%`
+          student: `${studentRate}%`,
+          ekskul: `${ekskulRate}%`
         },
         chart: chartData,
-        recent: recentLogs
+        recent: recentLogs,
+        periodName
       }
     });
 

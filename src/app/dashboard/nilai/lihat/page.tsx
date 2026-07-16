@@ -16,6 +16,8 @@ import {
   Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 interface DailyGrade {
   assignment_name: string;
@@ -75,7 +77,9 @@ function ViewGradesContent() {
   
   // Daily modal inputs
   const [newAssignmentName, setNewAssignmentName] = useState("");
+  const [newAssignmentId, setNewAssignmentId] = useState("");
   const [newAssignmentScore, setNewAssignmentScore] = useState("");
+  const [assignments, setAssignments] = useState<any[]>([]);
   
   // Term modal inputs
   const [inputUts, setInputUts] = useState("");
@@ -123,6 +127,28 @@ function ViewGradesContent() {
     fetchSubjects();
   }, [classId, periodId]);
 
+  // Fetch assignments when selectedSubjectId or subjects changes
+  useEffect(() => {
+    const subjectObj = subjects.find(s => String(s.id) === String(selectedSubjectId));
+    const classSubjectId = subjectObj ? subjectObj.classSubjectId : "";
+    if (!classSubjectId) {
+      setAssignments([]);
+      return;
+    }
+    async function fetchAssignments() {
+      try {
+        const res = await fetch(`/api/assignments?class_subject_id=${classSubjectId}`);
+        const json = await res.json();
+        if (json.success) {
+          setAssignments(json.data || []);
+        }
+      } catch (err) {
+        console.error("Error loading assignments:", err);
+      }
+    }
+    fetchAssignments();
+  }, [selectedSubjectId, subjects]);
+
   const fetchGrades = async () => {
     if (!classId) return;
     try {
@@ -162,7 +188,7 @@ function ViewGradesContent() {
 
   const handleSaveDaily = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedStudent || !newAssignmentName || !newAssignmentScore) return;
+    if (!selectedStudent || !newAssignmentId || !newAssignmentScore) return;
 
     try {
       const subjectObj = subjects.find(s => String(s.id) === String(selectedSubjectId));
@@ -177,7 +203,7 @@ function ViewGradesContent() {
           periodId,
           classSubjectId,
           type: "daily",
-          assignmentName: newAssignmentName,
+          assignmentId: newAssignmentId,
           score: parseFloat(newAssignmentScore),
         }),
       });
@@ -185,7 +211,7 @@ function ViewGradesContent() {
       const json = await res.json();
       if (json.success) {
         alert("Nilai tugas berhasil disimpan!");
-        setNewAssignmentName("");
+        setNewAssignmentId("");
         setNewAssignmentScore("");
         
         // Refresh modal data
@@ -246,6 +272,90 @@ function ViewGradesContent() {
     }
   };
 
+  const handleDownloadPdf = () => {
+    if (students.length === 0) {
+      alert("Tidak ada data nilai untuk diunduh!");
+      return;
+    }
+
+    const subjectObj = subjects.find(s => String(s.id) === String(selectedSubjectId));
+    const subjectName = subjectObj ? `${subjectObj.name} (${subjectObj.code})` : "Mata Pelajaran";
+
+    const doc = new jsPDF();
+
+    // Title & Headers
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(30, 41, 59); // Slate-800
+    doc.text("SD Islam Baiturrachman", 14, 18);
+
+    doc.setFontSize(10);
+    doc.setFont("Helvetica", "normal");
+    doc.setTextColor(100, 116, 139); // Slate-500
+    doc.text("Sistem Informasi Monitoring Nilai Siswa", 14, 24);
+
+    doc.setDrawColor(226, 232, 240); // Slate-200
+    doc.setLineWidth(0.5);
+    doc.line(14, 28, 196, 28);
+
+    // Title
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(37, 99, 235); // Blue-600
+    doc.text(`REKAPITULASI NILAI SISWA`, 14, 38);
+
+    doc.setFontSize(9);
+    doc.setFont("Helvetica", "normal");
+    doc.setTextColor(71, 85, 105); // Slate-600
+
+    doc.text(`Mata Pelajaran : ${subjectName}`, 14, 44);
+    doc.text(`Tahun Akademik : ${stats.academicYear} - Semester ${stats.semester}`, 14, 50);
+
+    const headers = ["No", "Nama Siswa", "NISN", "Rata Tugas", "UTS", "UAS", "Nilai Akhir", "Kehadiran", "Status"];
+    const rows = filteredStudents.map((s, idx) => [
+      idx + 1,
+      s.name,
+      s.nisn,
+      s.dailyAssignmentAvg,
+      s.uts,
+      s.uas,
+      s.average,
+      `${s.attendancePercentage}%`,
+      s.status
+    ]);
+
+    autoTable(doc, {
+      head: [headers],
+      body: rows,
+      startY: 56,
+      theme: "grid",
+      headStyles: {
+        fillColor: [15, 23, 42], // Slate-900
+        textColor: 255,
+        fontStyle: "bold",
+        fontSize: 9
+      },
+      styles: {
+        fontSize: 8.5,
+        cellPadding: 3
+      },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 10 },
+        1: { halign: "left" },
+        2: { halign: "center" },
+        3: { halign: "center" },
+        4: { halign: "center" },
+        5: { halign: "center" },
+        6: { halign: "center" },
+        7: { halign: "center" },
+        8: { halign: "center" }
+      }
+    });
+
+    const fileName = `Rekap_Nilai_${subjectName.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+    doc.save(fileName);
+  };
+
   // Filter students by search query
   const filteredStudents = students.filter(s =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -303,7 +413,10 @@ function ViewGradesContent() {
 
         {/* Top actions */}
         <div className="flex items-center gap-3 self-stretch xl:self-auto">
-          <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8] whitespace-nowrap">
+          <Button
+            onClick={handleDownloadPdf}
+            className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8] whitespace-nowrap"
+          >
             <Download className="w-4 h-4" />
             Download Rekap Nilai
           </Button>
@@ -571,16 +684,16 @@ function ViewGradesContent() {
                         <label className="text-[10px] font-bold text-slate-500">Nama Tugas</label>
                         <select
                           required
-                          value={newAssignmentName}
-                          onChange={(e) => setNewAssignmentName(e.target.value)}
+                          value={newAssignmentId}
+                          onChange={(e) => setNewAssignmentId(e.target.value)}
                           className="px-3.5 py-2.5 bg-[#f8fafc] border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 outline-none"
                         >
                           <option value="">Pilih Tugas...</option>
-                          <option value="Tugas 1">Tugas 1</option>
-                          <option value="Tugas 2">Tugas 2</option>
-                          <option value="Tugas 3">Tugas 3</option>
-                          <option value="Tugas 4">Tugas 4</option>
-                          <option value="Tugas 5">Tugas 5</option>
+                          {assignments.map((assign) => (
+                            <option key={assign.id} value={assign.id}>
+                              {assign.name}
+                            </option>
+                          ))}
                         </select>
                       </div>
                       

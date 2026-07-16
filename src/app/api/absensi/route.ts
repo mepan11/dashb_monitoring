@@ -246,7 +246,7 @@ export async function GET(request: Request) {
            JOIN students s ON sp.student_id = s.id
            LEFT JOIN class_periods clp ON sp.class_period_id = clp.id
            LEFT JOIN classes cl ON clp.class_id = cl.id
-           LEFT JOIN student_attendance sa ON sp.id = sa.student_period_id AND sa.date = ?
+           LEFT JOIN student_attendance sa ON sp.id = sa.student_period_id AND sa.date = ? AND sa.class_subject_id IS NULL
            WHERE es.extracurricular_period_id = ?
            ORDER BY s.name ASC`,
           [date, epId]
@@ -442,7 +442,7 @@ export async function POST(request: Request) {
 
         if (studentPeriodId) {
           const [existing]: any = await db.query(
-            "SELECT id FROM student_attendance WHERE student_period_id = ? AND date = ?",
+            "SELECT id FROM student_attendance WHERE student_period_id = ? AND date = ? AND class_subject_id IS NULL",
             [studentPeriodId, date]
           );
 

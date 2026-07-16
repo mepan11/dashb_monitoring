@@ -51,11 +51,9 @@ export default function TambahCoachPage() {
           name,
           email,
           idNumber: nik,
-          specialization: ekskul || specialization,
+          specialization,
           contact: phone,
           status: "Aktif",
-          schedule,
-          location,
           periodId // Kirim periodId aktif
         }),
       });
@@ -141,6 +139,18 @@ export default function TambahCoachPage() {
               </div>
 
               <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Spesialisasi/Keahlian</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Robotik, Futsal, Seni Lukis"
+                  value={specialization}
+                  onChange={(e) => setSpecialization(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tempat Lahir</label>
                 <input
                   type="text"
@@ -218,53 +228,6 @@ export default function TambahCoachPage() {
             </div>
           </div>
 
-          {/* Card 3: Penugasan & Hari Latihan */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)] flex flex-col gap-5">
-            <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
-                <Clock className="w-4 h-4" />
-              </div>
-              Penugasan Ekskul, Jadwal & Lokasi
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Bidang Ekskul yang Diampu</label>
-                <input
-                  type="text"
-                  placeholder="Contoh: Robotik, Sepak Bola, Seni Lukis"
-                  value={ekskul}
-                  onChange={(e) => setEkskul(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Hari Latihan</label>
-                <input
-                  type="text"
-                  placeholder="Contoh: Selasa, Kamis"
-                  value={schedule}
-                  onChange={(e) => setSchedule(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Lokasi Latihan</label>
-              <input
-                type="text"
-                placeholder="Contoh: Lab Komputer 2, Ruang Robotik"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                required
-                className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-[#f8fafc] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
-              />
-            </div>
-          </div>
 
           {/* Bottom Actions Form Footer */}
           <div className="flex items-center justify-end gap-4 border-t border-slate-100/80 pt-6 mt-2">

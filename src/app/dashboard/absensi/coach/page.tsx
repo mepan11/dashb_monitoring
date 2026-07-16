@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
@@ -15,6 +15,8 @@ import {
   Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 interface CoachRow {
   id: string;
@@ -61,6 +63,10 @@ export default function CoachAttendancePage() {
   const today = new Date().toISOString().split("T")[0];
   const [selectedDate, setSelectedDate] = useState(today);
 
+  // Date range for PDF rekap
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
+
   // Mendengarkan perubahan periode akademik
   useEffect(() => {
     const cached = localStorage.getItem("active_period_id") || "";
@@ -78,6 +84,30 @@ export default function CoachAttendancePage() {
       window.removeEventListener("academic_period_changed", handlePeriodChange);
     };
   }, []);
+
+  // Initialize date range defaults safely
+  useEffect(() => {
+    const tzoffset = new Date().getTimezoneOffset() * 60000;
+    const todayStr = new Date(Date.now() - tzoffset).toISOString().slice(0, 10);
+    const thirtyDaysAgo = new Date(Date.now() - tzoffset - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    setStartDate(thirtyDaysAgo);
+    setEndDate(todayStr);
+  }, []);
+
+  const formatIndonesianDate = (dateStr: string) => {
+    try {
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const date = new Date(year, month - 1, day);
+      return date.toLocaleDateString("id-ID", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      });
+    } catch {
+      return dateStr;
+    }
+  };
 
   const fetchCoaches = useCallback(async () => {
     if (!periodId) return;
@@ -146,6 +176,152 @@ export default function CoachAttendancePage() {
     }
   };
 
+  const handlePrintPDF = async () => {
+    if (!startDate || !endDate) {
+      alert("Pilih Tanggal Mulai dan Tanggal Akhir");
+      return;
+    }
+    setSaving(true);
+    try {
+      let queryParams = new URLSearchParams({
+        type: "coach",
+        startDate,
+        endDate
+      });
+      if (periodId) {
+        queryParams.append("period_id", periodId);
+      }
+
+      const res = await fetch(`/api/absensi?${queryParams.toString()}`);
+      const data = await res.json();
+
+      if (!data.success) {
+        alert(data.message || "Gagal mengambil riwayat presensi");
+        setSaving(false);
+        return;
+      }
+
+      const records = data.data;
+      if (records.length === 0) {
+        alert("Tidak ada data presensi pada rentang tanggal tersebut.");
+        setSaving(false);
+        return;
+      }
+
+      const groupedByDate: { [date: string]: any[] } = {};
+      records.forEach((r: any) => {
+        const d = r.date;
+        if (!groupedByDate[d]) {
+          groupedByDate[d] = [];
+        }
+        groupedByDate[d].push(r);
+      });
+
+      const sortedDates = Object.keys(groupedByDate).sort();
+
+      const doc = new jsPDF();
+
+      doc.setFontSize(10);
+      doc.setFont("Helvetica", "normal");
+      doc.setTextColor(100, 116, 139);
+      doc.text("Sistem Informasi Monitoring Presensi", 14, 24);
+
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.5);
+      doc.line(14, 28, 196, 28);
+
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(37, 99, 235);
+      doc.text("Laporan Kehadiran Coach", 14, 38);
+
+      doc.setFontSize(9);
+      doc.setFont("Helvetica", "normal");
+      doc.setTextColor(71, 85, 105);
+
+      const formattedPeriod = `Periode: ${formatIndonesianDate(startDate)} s/d ${formatIndonesianDate(endDate)}`;
+      doc.text(formattedPeriod, 14, 44);
+
+      let currentY = 50;
+
+      sortedDates.forEach((date) => {
+        if (currentY > 240) {
+          doc.addPage();
+          currentY = 20;
+        }
+
+        doc.setFont("Helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(15, 23, 42);
+        doc.text(`Hari / Tanggal: ${formatIndonesianDate(date)}`, 14, currentY);
+        currentY += 4;
+
+        const dateRecords = groupedByDate[date];
+        const headers = ["No", "Nama Coach", "ID Number", "Waktu Masuk", "Waktu Keluar", "Status"];
+        const rows = dateRecords.map((r: any, idx: number) => {
+          let effectiveStatus = r.attendanceStatus;
+          if ((r.attendanceStatus === "Hadir" || r.attendanceStatus === "Terlambat") && r.checkInTime) {
+            const timePart = r.checkInTime.replace(" WIB", "").trim();
+            const [hh, mm] = timePart.split(":").map(Number);
+            const totalMins = hh * 60 + mm;
+            effectiveStatus = totalMins < 7 * 60 ? "Hadir" : "Terlambat";
+          }
+          return [idx + 1, r.name, r.idNumber || "—", r.checkInTime || "—", r.checkOutTime || "—", effectiveStatus];
+        });
+
+        autoTable(doc, {
+          head: [headers],
+          body: rows,
+          startY: currentY,
+          theme: "grid",
+          headStyles: {
+            fillColor: [15, 23, 42],
+            textColor: [255, 255, 255],
+            fontSize: 9,
+            fontStyle: "bold"
+          },
+          bodyStyles: {
+            fontSize: 8.5,
+            textColor: [30, 41, 59],
+            lineColor: [148, 163, 184],
+            lineWidth: 0.4
+          },
+          alternateRowStyles: {
+            fillColor: [248, 250, 252]
+          },
+          columnStyles: {
+            0: { cellWidth: 10, halign: "center" }
+          },
+          margin: { left: 14, right: 14 },
+          didParseCell: (cellData) => {
+            if (cellData.section === "body" && cellData.column.index === headers.length - 1) {
+              const statusText = String(cellData.cell.raw).trim();
+              if (statusText === "Hadir") {
+                cellData.cell.styles.textColor = [16, 185, 129];
+                cellData.cell.styles.fontStyle = "bold";
+              } else if (statusText === "Absen" || statusText === "Alfa") {
+                cellData.cell.styles.textColor = [239, 68, 68];
+                cellData.cell.styles.fontStyle = "bold";
+              } else if (statusText === "Terlambat" || statusText === "Sakit" || statusText === "Izin") {
+                cellData.cell.styles.textColor = [245, 158, 11];
+                cellData.cell.styles.fontStyle = "bold";
+              }
+            }
+          }
+        });
+
+        currentY = (doc as any).lastAutoTable.finalY + 12;
+      });
+
+      doc.save(`Laporan_Presensi_Coach_${startDate}_to_${endDate}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat mencetak PDF");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const filtered = coaches.filter(
     (c) =>
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -201,14 +377,21 @@ export default function CoachAttendancePage() {
     <div className="flex flex-col gap-8">
       {/* Header bar */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold text-[#1e293b]">Presensi Coach</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Pantau dan kelola kehadiran coach ekstrakurikuler.
-            {periodName && (
-              <span className="ml-2 font-semibold text-blue-600">Periode: {periodName}</span>
-            )}
-          </p>
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/absensi">
+            <button className="p-2 hover:bg-slate-100 rounded-xl transition-all">
+              <ChevronLeft className="w-5 h-5 text-slate-600" />
+            </button>
+          </Link>
+          <div>
+            <h1 className="text-3xl font-extrabold text-[#1e293b]">Presensi Coach</h1>
+            <p className="text-sm text-slate-400 mt-1">
+              Pantau dan kelola kehadiran coach.
+              {periodName && (
+                <span className="ml-2 font-semibold text-blue-600">Periode: {periodName}</span>
+              )}
+            </p>
+          </div>
         </div>
 
         {/* Top actions */}
@@ -236,7 +419,29 @@ export default function CoachAttendancePage() {
             {saving ? "Menyimpan..." : "Simpan Presensi"}
           </Button>
 
-          <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]">
+          {/* Rekap Date Range */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-500 shadow-sm">
+            <span>Rekap Mulai:</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="bg-transparent border-none outline-none text-slate-700 font-bold text-[11px] cursor-pointer"
+            />
+            <span>s/d:</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="bg-transparent border-none outline-none text-slate-700 font-bold text-[11px] cursor-pointer"
+            />
+          </div>
+
+          <Button
+            onClick={handlePrintPDF}
+            disabled={saving || !periodId}
+            className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]"
+          >
             <Download className="w-4 h-4" />
             Download Rekap
           </Button>
@@ -270,7 +475,6 @@ export default function CoachAttendancePage() {
 
       {/* Main Table Card */}
       <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.02)] overflow-hidden">
-
         {/* Search & Filter Header */}
         <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <h2 className="text-lg font-extrabold text-slate-800">Data Kehadiran Coach</h2>
@@ -278,7 +482,7 @@ export default function CoachAttendancePage() {
             <Search className="w-4 h-4 text-slate-400 shrink-0" />
             <input
               type="text"
-              placeholder="Cari nama atau ID Coach..."
+              placeholder="Cari nama..."
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
               className="bg-transparent text-xs text-slate-700 w-full outline-none placeholder-slate-400"
@@ -292,11 +496,10 @@ export default function CoachAttendancePage() {
             <thead>
               <tr className="border-b border-slate-100 bg-[#fafbfc] text-[10px] font-extrabold text-slate-400 tracking-wider">
                 <th className="py-4 px-6">NAMA COACH</th>
-                <th className="py-4 px-6">ID COACH</th>
+                <th className="py-4 px-6">ID NUMBER</th>
                 <th className="py-4 px-6">WAKTU MASUK</th>
                 <th className="py-4 px-6">WAKTU KELUAR</th>
                 <th className="py-4 px-6">STATUS KEHADIRAN</th>
-                <th className="py-4 px-6 text-center">AKSI</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-semibold">
@@ -326,7 +529,7 @@ export default function CoachAttendancePage() {
                       {/* Name */}
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-emerald-50 text-emerald-600 font-bold flex items-center justify-center border border-emerald-100 shadow-sm shrink-0">
+                          <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 font-bold flex items-center justify-center border border-blue-100 shadow-sm shrink-0">
                             {row.initials}
                           </div>
                           <span className="font-bold text-slate-800">{row.name}</span>
@@ -368,14 +571,14 @@ export default function CoachAttendancePage() {
                             setAttendance((prev) => ({ ...prev, [row.id]: e.target.value }))
                           }
                           className={`text-[11px] font-bold px-3 py-1.5 rounded-full border outline-none cursor-pointer ${currentStatus === "Hadir"
-                            ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                            : currentStatus === "Terlambat"
-                              ? "bg-amber-50 text-amber-600 border-amber-100"
-                              : currentStatus === "Izin"
-                                ? "bg-blue-50 text-blue-600 border-blue-100"
-                                : currentStatus === "Absen"
-                                  ? "bg-rose-50 text-rose-600 border-rose-100"
-                                  : "bg-slate-50 text-slate-400 border-slate-100"
+                              ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                              : currentStatus === "Terlambat"
+                                ? "bg-amber-50 text-amber-600 border-amber-100"
+                                : currentStatus === "Izin"
+                                  ? "bg-blue-50 text-blue-600 border-blue-100"
+                                  : currentStatus === "Absen"
+                                    ? "bg-rose-50 text-rose-600 border-rose-100"
+                                    : "bg-slate-50 text-slate-400 border-slate-100"
                             }`}
                         >
                           <option value="">— Pilih Status —</option>
@@ -384,16 +587,6 @@ export default function CoachAttendancePage() {
                           <option value="Izin">Izin</option>
                           <option value="Absen">Absen</option>
                         </select>
-                      </td>
-
-                      {/* Action link */}
-                      <td className="py-4 px-6 text-center">
-                        <Link
-                          href={`/dashboard/coach/profile?id=${row.id}`}
-                          className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline"
-                        >
-                          Detail
-                        </Link>
                       </td>
                     </tr>
                   );
@@ -422,8 +615,8 @@ export default function CoachAttendancePage() {
                 key={p}
                 onClick={() => setCurrentPage(p)}
                 className={`w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center ${p === currentPage
-                  ? "bg-[#2563eb] text-white shadow-sm"
-                  : "hover:bg-slate-50 text-slate-600"
+                    ? "bg-[#2563eb] text-white shadow-sm"
+                    : "hover:bg-slate-50 text-slate-600"
                   }`}
               >
                 {p}

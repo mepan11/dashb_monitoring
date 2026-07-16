@@ -238,6 +238,7 @@ function ExtracurricularDetailContent() {
         body: JSON.stringify({
           studentId: selectedStudentId,
           status: selectedInitialStatus,
+          periodId,
         }),
       });
       const json = await res.json();

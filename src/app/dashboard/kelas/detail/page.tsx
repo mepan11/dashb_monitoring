@@ -84,9 +84,10 @@ function ClassDetailContent() {
   }, [selectedGender, selectedStatus, searchQuery]);
 
   const fetchClassStudents = useCallback(async () => {
+    if (!periodId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/classes/${classId}/students`);
+      const res = await fetch(`/api/classes/${classId}/students?period_id=${periodId}`);
       const json = await res.json();
       if (json.success) {
         setClassName(json.className);
@@ -99,11 +100,11 @@ function ClassDetailContent() {
     } finally {
       setLoading(false);
     }
-  }, [classId]);
+  }, [classId, periodId]);
 
   useEffect(() => {
     fetchClassStudents();
-  }, [fetchClassStudents]);
+  }, [fetchClassStudents, periodId]);
 
   // Load available students when modal opens or period changes
   useEffect(() => {
@@ -128,7 +129,7 @@ function ClassDetailContent() {
   const handleDeleteStudent = async (studentId: string, name: string) => {
     if (!confirm(`Keluarkan siswa "${name}" dari kelas ${className}?`)) return;
     try {
-      const res = await fetch(`/api/classes/${classId}/students?studentId=${studentId}`, {
+      const res = await fetch(`/api/classes/${classId}/students?studentId=${studentId}&period_id=${periodId}`, {
         method: "DELETE",
       });
       const json = await res.json();
@@ -178,7 +179,7 @@ function ClassDetailContent() {
       const res = await fetch(`/api/classes/${classId}/students`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId: selectedStudentId }),
+        body: JSON.stringify({ studentId: selectedStudentId, periodId }),
       });
       const json = await res.json();
       if (res.ok && json.success) {

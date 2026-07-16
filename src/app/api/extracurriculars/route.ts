@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     }
 
     let query = `
-      SELECT e.id, e.name, e.category, e.schedule, e.location, e.contact,
+      SELECT e.id, ep.id AS extracurricularPeriodId, e.name, e.category, e.schedule, e.location, e.contact,
              c.name AS coachName, cp.coach_id AS coachId, ep.period_id AS periodId,
              (
                SELECT COUNT(*) 

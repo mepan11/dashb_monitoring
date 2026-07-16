@@ -56,14 +56,18 @@ export async function GET(request: Request) {
       if (classSubjectId) {
         // 1. Ambil nilai sumatif (UTS, UAS) & status dari tabel grades
         const [gRows]: any = await db.query(
-          "SELECT daily_assignment, ekskul, uts, uas, average, status FROM grades WHERE student_period_id = ? AND class_subject_id = ? LIMIT 1",
+          "SELECT daily_assignment, uts, uas, average, status FROM grades WHERE student_period_id = ? AND class_subject_id = ? LIMIT 1",
           [spId, classSubjectId]
         );
         gradeRow = gRows;
 
-        // 2. Ambil rincian nilai tugas harian dari student_daily_grades
+        // 2. Ambil rincian nilai tugas harian dari student_daily_grades dengan join ke subject_assignments & task_names
         const [dgRows]: any = await db.query(
-          "SELECT assignment_name, score FROM student_daily_grades WHERE student_period_id = ? AND class_subject_id = ?",
+          `SELECT tn.name AS assignment_name, g.score 
+           FROM student_daily_grades g
+           JOIN subject_assignments sa ON g.assignment_id = sa.id
+           JOIN task_names tn ON sa.task_name_id = tn.id
+           WHERE g.student_period_id = ? AND g.class_subject_id = ?`,
           [spId, classSubjectId]
         );
         dailyGrades = dgRows;
@@ -77,7 +81,6 @@ export async function GET(request: Request) {
 
       const uts = parseFloat(gradeRow[0]?.uts || 0);
       const uas = parseFloat(gradeRow[0]?.uas || 0);
-      const ekskul = parseFloat(gradeRow[0]?.ekskul || 0);
 
       const average = (2 * dailyAssignmentAvg + uts + uas) / 4;
       const status = average >= 75 ? "Lulus" : "Remedial";
@@ -110,7 +113,6 @@ export async function GET(request: Request) {
         initials,
         dailyGrades,
         dailyAssignmentAvg: Math.round(dailyAssignmentAvg * 10) / 10,
-        ekskul,
         uts,
         uas,
         average: Math.round(average * 10) / 10,
@@ -154,7 +156,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { studentId, classId, periodId, classSubjectId, type, assignmentName, score, uts, uas, ekskul } = await request.json();
+    const { studentId, classId, periodId, classSubjectId, type, assignmentId, score, uts, uas } = await request.json();
 
     if (!studentId || !classId || !classSubjectId) {
       return NextResponse.json(
@@ -186,18 +188,18 @@ export async function POST(request: Request) {
     }
 
     if (type === "daily") {
-      if (!assignmentName) {
+      if (!assignmentId) {
         return NextResponse.json(
-          { success: false, message: "Nama tugas (assignmentName) wajib diisi" },
+          { success: false, message: "ID tugas (assignmentId) wajib diisi" },
           { status: 400 }
         );
       }
 
       await db.query(
-        `INSERT INTO student_daily_grades (student_period_id, class_subject_id, assignment_name, score)
+        `INSERT INTO student_daily_grades (student_period_id, class_subject_id, assignment_id, score)
          VALUES (?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE score = ?`,
-        [studentPeriodId, classSubjectId, assignmentName, score, score]
+        [studentPeriodId, classSubjectId, assignmentId, score, score]
       );
 
       const [dailyGrades]: any = await db.query(
@@ -207,7 +209,7 @@ export async function POST(request: Request) {
       const sum = dailyGrades.reduce((acc: number, item: any) => acc + parseFloat(item.score || 0), 0);
       const dailyAssignmentAvg = sum / dailyGrades.length;
 
-      await updateMasterGrades(studentPeriodId, classSubjectId, dailyAssignmentAvg, null, null, null);
+      await updateMasterGrades(studentPeriodId, classSubjectId, dailyAssignmentAvg, null, null);
 
       return NextResponse.json({
         success: true,
@@ -216,7 +218,7 @@ export async function POST(request: Request) {
     }
 
     if (type === "term") {
-      await updateMasterGrades(studentPeriodId, classSubjectId, null, uts, uas, ekskul);
+      await updateMasterGrades(studentPeriodId, classSubjectId, null, uts, uas);
       return NextResponse.json({
         success: true,
         message: "Nilai UTS/UAS berhasil disimpan",
@@ -242,18 +244,16 @@ async function updateMasterGrades(
   classSubjectId: any,
   dailyAssignment: number | null,
   uts: number | null,
-  uas: number | null,
-  ekskul: number | null
+  uas: number | null
 ) {
   const [existing]: any = await db.query(
-    "SELECT id, daily_assignment, uts, uas, ekskul FROM grades WHERE student_period_id = ? AND class_subject_id = ? LIMIT 1",
+    "SELECT id, daily_assignment, uts, uas FROM grades WHERE student_period_id = ? AND class_subject_id = ? LIMIT 1",
     [studentPeriodId, classSubjectId]
   );
 
-  let newDaily = dailyAssignment !== null ? dailyAssignment : (existing[0]?.daily_assignment || 0);
-  let newUts = uts !== null ? uts : (existing[0]?.uts || 0);
-  let newUas = uas !== null ? uas : (existing[0]?.uas || 0);
-  let newEkskul = ekskul !== null ? ekskul : (existing[0]?.ekskul || 0);
+  const newDaily = dailyAssignment !== null ? dailyAssignment : (existing[0]?.daily_assignment || 0);
+  const newUts = uts !== null ? uts : (existing[0]?.uts || 0);
+  const newUas = uas !== null ? uas : (existing[0]?.uas || 0);
 
   const average = (2 * parseFloat(newDaily) + parseFloat(newUts) + parseFloat(newUas)) / 4;
   const status = average >= 75 ? "Lulus" : "Remedial";
@@ -261,15 +261,15 @@ async function updateMasterGrades(
   if (existing && existing.length > 0) {
     await db.query(
       `UPDATE grades 
-       SET daily_assignment = ?, uts = ?, uas = ?, ekskul = ?, average = ?, status = ?
+       SET daily_assignment = ?, uts = ?, uas = ?, average = ?, status = ?
        WHERE id = ?`,
-      [newDaily, newUts, newUas, newEkskul, average, status, existing[0].id]
+      [newDaily, newUts, newUas, average, status, existing[0].id]
     );
   } else {
     await db.query(
-      `INSERT INTO grades (student_period_id, class_subject_id, daily_assignment, uts, uas, ekskul, average, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [studentPeriodId, classSubjectId, newDaily, newUts, newUas, newEkskul, average, status]
+      `INSERT INTO grades (student_period_id, class_subject_id, daily_assignment, uts, uas, average, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [studentPeriodId, classSubjectId, newDaily, newUts, newUas, average, status]
     );
   }
 }
