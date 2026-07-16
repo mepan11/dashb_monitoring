@@ -98,9 +98,10 @@ function ExtracurricularDetailContent() {
   }, []);
 
   const fetchDetail = useCallback(async () => {
+    if (!periodId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/extracurriculars/${ekskulId}`);
+      const res = await fetch(`/api/extracurriculars/${ekskulId}?period_id=${periodId}`);
       const json = await res.json();
       if (json.success) {
         setEkskulName(json.data.name);
@@ -116,7 +117,7 @@ function ExtracurricularDetailContent() {
     } finally {
       setLoading(false);
     }
-  }, [ekskulId]);
+  }, [ekskulId, periodId]);
 
   const fetchStudents = useCallback(async () => {
     if (!periodId) return;
@@ -136,11 +137,11 @@ function ExtracurricularDetailContent() {
 
   useEffect(() => {
     fetchDetail();
-  }, [fetchDetail]);
+  }, [fetchDetail, periodId]);
 
   useEffect(() => {
     fetchStudents();
-  }, [fetchStudents]);
+  }, [fetchStudents, periodId]);
 
   // Load coaches for dropdown
   useEffect(() => {

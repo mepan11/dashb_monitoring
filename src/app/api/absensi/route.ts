@@ -53,6 +53,8 @@ export async function GET(request: Request) {
         return NextResponse.json({ success: true, data: [] });
       }
 
+      const classSubjectId = url.searchParams.get("classSubjectId") || url.searchParams.get("class_subject_id");
+
       if (isRange) {
         // Query untuk histori rentang
         const [rows]: any = await db.query(
@@ -60,23 +62,38 @@ export async function GET(request: Request) {
            FROM student_attendance sa
            JOIN student_periods sp ON sa.student_period_id = sp.id
            JOIN students s ON sp.student_id = s.id
-           WHERE sp.class_period_id = ? AND sa.date BETWEEN ? AND ?
+           WHERE sp.class_period_id = ? ${classSubjectId ? "AND sa.class_subject_id = ?" : ""} AND sa.date BETWEEN ? AND ?
            ORDER BY sa.date ASC, s.name ASC`,
-          [classPeriodId, startDate, endDate]
+          classSubjectId ? [classPeriodId, classSubjectId, startDate, endDate] : [classPeriodId, startDate, endDate]
         );
         return NextResponse.json({ success: true, data: rows });
       } else {
         // Ambil data siswa dan kehadiran pada tanggal tersebut
-        const [rows]: any = await db.query(
-          `SELECT s.id, s.name, s.gender_text, s.gender_code, s.nisn, s.status AS studentStatus,
-                  sa.status AS attendanceStatus
-           FROM student_periods sp
-           JOIN students s ON sp.student_id = s.id
-           LEFT JOIN student_attendance sa ON sp.id = sa.student_period_id AND sa.date = ?
-           WHERE sp.class_period_id = ?
-           ORDER BY s.name ASC`,
-          [date, classPeriodId]
-        );
+        let rows: any[];
+        if (!classSubjectId) {
+          const [result]: any = await db.query(
+            `SELECT s.id, s.name, s.gender_text, s.gender_code, s.nisn, s.status AS studentStatus,
+                    NULL AS attendanceStatus
+             FROM student_periods sp
+             JOIN students s ON sp.student_id = s.id
+             WHERE sp.class_period_id = ?
+             ORDER BY s.name ASC`,
+            [classPeriodId]
+          );
+          rows = result;
+        } else {
+          const [result]: any = await db.query(
+            `SELECT s.id, s.name, s.gender_text, s.gender_code, s.nisn, s.status AS studentStatus,
+                    sa.status AS attendanceStatus
+             FROM student_periods sp
+             JOIN students s ON sp.student_id = s.id
+             LEFT JOIN student_attendance sa ON sp.id = sa.student_period_id AND sa.class_subject_id = ? AND sa.date = ?
+             WHERE sp.class_period_id = ?
+             ORDER BY s.name ASC`,
+            [classSubjectId, date, classPeriodId]
+          );
+          rows = result;
+        }
 
         const formatted = rows.map((s: any) => {
           const nameParts = s.name.trim().split(" ");
@@ -292,6 +309,7 @@ export async function POST(request: Request) {
     if (type === "coach") type = "coaches";
 
     if (type === "students") {
+      const classSubjectId = body.classSubjectId || body.class_subject_id || null;
       for (const item of attendance) {
         const { studentId, status } = item;
         
@@ -304,8 +322,8 @@ export async function POST(request: Request) {
 
         if (studentPeriodId) {
           const [existing]: any = await db.query(
-            "SELECT id FROM student_attendance WHERE student_period_id = ? AND date = ?",
-            [studentPeriodId, date]
+            "SELECT id FROM student_attendance WHERE student_period_id = ? AND date = ? AND (class_subject_id = ? OR (class_subject_id IS NULL AND ? IS NULL))",
+            [studentPeriodId, date, classSubjectId, classSubjectId]
           );
 
           if (existing.length > 0) {
@@ -315,8 +333,8 @@ export async function POST(request: Request) {
             );
           } else {
             await db.query(
-              "INSERT INTO student_attendance (student_period_id, status, date) VALUES (?, ?, ?)",
-              [studentPeriodId, status, date]
+              "INSERT INTO student_attendance (student_period_id, class_subject_id, status, date) VALUES (?, ?, ?, ?)",
+              [studentPeriodId, classSubjectId, status, date]
             );
           }
         }

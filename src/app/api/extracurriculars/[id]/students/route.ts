@@ -41,7 +41,22 @@ export async function GET(
       [epId]
     );
 
-    return NextResponse.json({ success: true, data: rows });
+    const formatted = rows.map((r: any) => {
+      const nameParts = (r.name || "").trim().split(" ");
+      const initials = nameParts.length >= 2
+        ? `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase()
+        : `${nameParts[0][0] || "S"}`.toUpperCase();
+      return {
+        id: String(r.id),
+        name: r.name,
+        className: r.class_label || "—",
+        nisn: r.nisn,
+        status: r.membershipStatus || "Aktif",
+        initials
+      };
+    });
+
+    return NextResponse.json({ success: true, data: formatted });
   } catch (error: any) {
     console.error("Extracurricular Students GET Error:", error);
     return NextResponse.json(

@@ -48,22 +48,26 @@ function EditKelasContent() {
     async function loadData() {
       setLoading(true);
       try {
-        const [teachRes, classRes, periodRes] = await Promise.all([
-          fetch(`/api/teachers?period_id=${periodId}`),
-          fetch(`/api/classes/${id}`),
-          fetch("/api/periods")
-        ]);
-        const teachJson = await teachRes.json();
+        const classRes = await fetch(`/api/classes/${id}`);
         const classJson = await classRes.json();
-        const periodJson = await periodRes.json();
+        let currentHomeroomTeacherId = "";
 
-        if (teachJson.success) setTeachers(teachJson.data);
         if (classJson.success && classJson.data) {
           const c = classJson.data;
           setClassName(c.className);
           setHomeroomTeacherId(c.homeroomTeacherId ? String(c.homeroomTeacherId) : "");
           setCapacity(c.capacity);
+          currentHomeroomTeacherId = c.homeroomTeacherId ? String(c.homeroomTeacherId) : "";
         }
+
+        const [teachRes, periodRes] = await Promise.all([
+          fetch(`/api/teachers?period_id=${periodId}&available_homeroom=true&current_homeroom_teacher_id=${currentHomeroomTeacherId}`),
+          fetch("/api/periods")
+        ]);
+        const teachJson = await teachRes.json();
+        const periodJson = await periodRes.json();
+
+        if (teachJson.success) setTeachers(teachJson.data);
 
         if (periodJson.success) {
           const current = periodJson.data.find((p: any) => String(p.id) === String(periodId));

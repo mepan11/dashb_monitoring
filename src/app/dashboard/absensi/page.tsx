@@ -191,22 +191,46 @@ export default function AbsensiPage() {
     }
   }, [periodId]);
 
-  // Fetch subjects and students (with attendance) when selected class or date changes
+  // Fetch subjects when selected class changes
+  useEffect(() => {
+    if (!selectedClassId || !periodId) {
+      setSubjects([]);
+      setSelectedSubjectId("");
+      return;
+    }
+    async function fetchSubjects() {
+      try {
+        const res = await fetch(`/api/classes/${selectedClassId}/subjects?period_id=${periodId}`);
+        const json = await res.json();
+        if (json.success) {
+          setSubjects(json.data);
+          if (json.data.length > 0) {
+            setSelectedSubjectId(String(json.data[0].id));
+          } else {
+            setSelectedSubjectId("");
+          }
+        }
+      } catch (err) {
+        console.error("Error loading subjects:", err);
+      }
+    }
+    fetchSubjects();
+  }, [selectedClassId, periodId]);
+
+  // Fetch students (with attendance) when class, subject, date, or period changes
   useEffect(() => {
     if (!selectedClassId || !selectedDate || !periodId) {
-      setSubjects([]);
       setStudents([]);
       return;
     }
 
-    async function fetchClassDetails() {
+    async function fetchStudentsAndAttendance() {
       try {
-        const [resSubj, resAtt] = await Promise.all([
-          fetch(`/api/classes/${selectedClassId}/subjects`).then((r) => r.json()),
-          fetch(`/api/absensi?type=students&date=${selectedDate}&classId=${selectedClassId}&period_id=${periodId}`).then((r) => r.json())
-        ]);
+        const subjectObj = subjects.find(s => String(s.id) === String(selectedSubjectId));
+        const classSubjectId = subjectObj ? subjectObj.classSubjectId : "";
 
-        if (resSubj.success) setSubjects(resSubj.data);
+        const resAtt = await fetch(`/api/absensi?type=students&date=${selectedDate}&classId=${selectedClassId}&classSubjectId=${classSubjectId}&period_id=${periodId}`).then((r) => r.json());
+
         if (resAtt.success) {
           setStudents(resAtt.data);
           const initialMap: { [id: string]: string } = {};
@@ -216,11 +240,11 @@ export default function AbsensiPage() {
           setStudentAttMap(initialMap);
         }
       } catch (err) {
-        console.error("Error loading class details:", err);
+        console.error("Error loading students and attendance:", err);
       }
     }
-    fetchClassDetails();
-  }, [selectedClassId, selectedDate, periodId]);
+    fetchStudentsAndAttendance();
+  }, [selectedClassId, selectedDate, selectedSubjectId, periodId, subjects]);
 
   // Fetch subjects for Riwayat class changes
   useEffect(() => {
@@ -411,8 +435,11 @@ export default function AbsensiPage() {
         setSaving(false);
         return;
       }
+      const subjectObj = subjects.find(s => String(s.id) === String(selectedSubjectId));
+      const classSubjectId = subjectObj ? subjectObj.classSubjectId : "";
+
       payload.classId = selectedClassId;
-      payload.subjectId = selectedSubjectId;
+      payload.classSubjectId = classSubjectId;
       payload.attendance = Object.entries(studentAttMap).map(([studentId, status]) => ({
         studentId: parseInt(studentId),
         status
@@ -458,7 +485,9 @@ export default function AbsensiPage() {
 
         // Refresh values after saving
         if (presensiType === "siswa") {
-          const resAtt = await fetch(`/api/absensi?type=students&date=${selectedDate}&classId=${selectedClassId}&period_id=${periodId}`).then((r) => r.json());
+          const subjectObj = subjects.find(s => String(s.id) === String(selectedSubjectId));
+          const classSubjectId = subjectObj ? subjectObj.classSubjectId : "";
+          const resAtt = await fetch(`/api/absensi?type=students&date=${selectedDate}&classId=${selectedClassId}&classSubjectId=${classSubjectId}&period_id=${periodId}`).then((r) => r.json());
           if (resAtt.success) {
             setStudents(resAtt.data);
             const initialMap: { [id: string]: string } = {};

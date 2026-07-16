@@ -26,8 +26,13 @@ function AddSubjectContent() {
   const [selectedSubjectId, setSelectedSubjectId] = useState("");
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
   const [selectedDays, setSelectedDays] = useState<string[]>(["Senin"]);
-  const [startTime, setStartTime] = useState("08:00");
-  const [endTime, setEndTime] = useState("09:30");
+  const [daySchedules, setDaySchedules] = useState<{ [day: string]: { startTime: string; endTime: string } }>({
+    "Senin": { startTime: "08:00", endTime: "09:30" },
+    "Selasa": { startTime: "08:00", endTime: "09:30" },
+    "Rabu": { startTime: "08:00", endTime: "09:30" },
+    "Kamis": { startTime: "08:00", endTime: "09:30" },
+    "Jumat": { startTime: "08:00", endTime: "09:30" }
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -52,7 +57,7 @@ function AddSubjectContent() {
     initOptions();
   }, []);
 
-  const daysList = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const daysList = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
 
   const toggleDay = (day: string) => {
     if (selectedDays.includes(day)) {
@@ -68,17 +73,25 @@ function AddSubjectContent() {
       alert("Harap pilih mata pelajaran dan guru pengajar!");
       return;
     }
+    if (selectedDays.length === 0) {
+      alert("Harap pilih setidaknya satu hari mengajar!");
+      return;
+    }
     setSaving(true);
     try {
+      const scheduleDaysPayload = selectedDays.map((day) => ({
+        day,
+        startTime: daySchedules[day]?.startTime || "08:00",
+        endTime: daySchedules[day]?.endTime || "09:30"
+      }));
+
       const res = await fetch(`/api/classes/${classId}/subjects`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subjectId: selectedSubjectId,
           teacherId: selectedTeacherId,
-          scheduleDays: selectedDays,
-          startTime,
-          endTime,
+          scheduleDays: scheduleDaysPayload,
         }),
       });
       const json = await res.json();
@@ -193,33 +206,53 @@ function AddSubjectContent() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Waktu Mulai</span>
-              <div className="relative">
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
-                />
-              </div>
-            </div>
+          {selectedDays.length > 0 && (
+            <div className="flex flex-col gap-4 mt-2 border-t border-slate-100 pt-4">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jam Pelajaran per Hari</span>
+              {selectedDays.map((day) => {
+                const sched = daySchedules[day] || { startTime: "08:00", endTime: "09:30" };
+                return (
+                  <div key={day} className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                    <span className="text-xs font-bold text-slate-700 w-24 shrink-0">{day}</span>
+                    
+                    <div className="flex-1 grid grid-cols-2 gap-3 w-full">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-slate-400">Mulai</span>
+                        <input
+                          type="time"
+                          value={sched.startTime}
+                          onChange={(e) => {
+                            setDaySchedules({
+                              ...daySchedules,
+                              [day]: { ...sched, startTime: e.target.value }
+                            });
+                          }}
+                          required
+                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                        />
+                      </div>
 
-            <div className="flex flex-col gap-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Waktu Selesai</span>
-              <div className="relative">
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
-                />
-              </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-slate-400">Selesai</span>
+                        <input
+                          type="time"
+                          value={sched.endTime}
+                          onChange={(e) => {
+                            setDaySchedules({
+                              ...daySchedules,
+                              [day]: { ...sched, endTime: e.target.value }
+                            });
+                          }}
+                          required
+                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
+          )}
         </div>
 
         {/* Tip Box */}

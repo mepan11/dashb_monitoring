@@ -16,7 +16,12 @@ export async function GET(request: Request) {
 
     let query = `
       SELECT e.id, e.name, e.category, e.schedule, e.location, e.contact,
-             c.name AS coachName, cp.coach_id AS coachId, ep.period_id AS periodId
+             c.name AS coachName, cp.coach_id AS coachId, ep.period_id AS periodId,
+             (
+               SELECT COUNT(*) 
+               FROM extracurricular_students es 
+               WHERE es.extracurricular_period_id = ep.id
+             ) AS membersCount
       FROM extracurriculars e
       JOIN extracurricular_periods ep ON e.id = ep.extracurricular_id AND ep.period_id = ?
       LEFT JOIN extracurricular_coaches ec ON ep.id = ec.extracurricular_period_id

@@ -45,7 +45,7 @@ export default function TambahKelasPage() {
     async function fetchTeachersAndPeriod() {
       try {
         const [teachRes, periodRes] = await Promise.all([
-          fetch(`/api/teachers?period_id=${periodId}`),
+          fetch(`/api/teachers?period_id=${periodId}&available_homeroom=true`),
           fetch("/api/periods")
         ]);
         const teachJson = await teachRes.json();

@@ -76,25 +76,27 @@ export async function DELETE(
       );
     }
 
-    // 2. Cek relasi data demi menjaga integritas database (Core Protection)
-    const [classCheck]: any = await db.query("SELECT COUNT(*) AS count FROM classes WHERE period_id = ?", [id]);
-    const [subjectCheck]: any = await db.query("SELECT COUNT(*) AS count FROM subjects WHERE period_id = ?", [id]);
-    const [studentCheck]: any = await db.query("SELECT COUNT(*) AS count FROM students WHERE period_id = ?", [id]);
-    const [ekskulCheck]: any = await db.query("SELECT COUNT(*) AS count FROM extracurriculars WHERE period_id = ?", [id]);
-    const [gradeCheck]: any = await db.query("SELECT COUNT(*) AS count FROM grades WHERE period_id = ?", [id]);
+    // 2. Cek relasi data demi menjaga integritas database (Core Protection) menggunakan junction tables 3NF
+    const [classCheck]: any = await db.query("SELECT COUNT(*) AS count FROM class_periods WHERE period_id = ?", [id]);
+    const [subjectCheck]: any = await db.query("SELECT COUNT(*) AS count FROM subject_periods WHERE period_id = ?", [id]);
+    const [studentCheck]: any = await db.query("SELECT COUNT(*) AS count FROM student_periods WHERE period_id = ?", [id]);
+    const [ekskulCheck]: any = await db.query("SELECT COUNT(*) AS count FROM extracurricular_periods WHERE period_id = ?", [id]);
+    const [teacherCheck]: any = await db.query("SELECT COUNT(*) AS count FROM teacher_periods WHERE period_id = ?", [id]);
+    const [coachCheck]: any = await db.query("SELECT COUNT(*) AS count FROM coach_periods WHERE period_id = ?", [id]);
     
     const referencesCount = 
       (classCheck[0]?.count || 0) +
       (subjectCheck[0]?.count || 0) +
       (studentCheck[0]?.count || 0) +
       (ekskulCheck[0]?.count || 0) +
-      (gradeCheck[0]?.count || 0);
+      (teacherCheck[0]?.count || 0) +
+      (coachCheck[0]?.count || 0);
 
     if (referencesCount > 0) {
       return NextResponse.json(
         { 
           success: false, 
-          message: "Periode akademik tidak dapat dihapus karena sudah memiliki data relasi (Kelas/Siswa/Mapel/Ekskul/Nilai) yang terhubung. Hapus atau pindahkan data tersebut terlebih dahulu." 
+          message: "Periode akademik tidak dapat dihapus karena sudah memiliki data relasi (Kelas/Siswa/Guru/Coach/Mapel/Ekskul) yang terhubung. Hapus atau pindahkan data tersebut terlebih dahulu." 
         },
         { status: 400 }
       );

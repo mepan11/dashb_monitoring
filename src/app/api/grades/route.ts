@@ -6,6 +6,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const classId = url.searchParams.get("class_id");
     const periodId = url.searchParams.get("period_id");
+    const classSubjectId = url.searchParams.get("class_subject_id") || url.searchParams.get("classSubjectId");
 
     if (!classId) {
       return NextResponse.json(
@@ -49,17 +50,24 @@ export async function GET(request: Request) {
     for (const sp of studentPeriods) {
       const spId = sp.student_period_id;
 
-      // 1. Ambil nilai sumatif (UTS, UAS) & status dari tabel grades
-      const [gradeRow]: any = await db.query(
-        "SELECT daily_assignment, ekskul, uts, uas, average, status FROM grades WHERE student_period_id = ? AND class_period_id = ? LIMIT 1",
-        [spId, classPeriodId]
-      );
+      let dailyGrades: any[] = [];
+      let gradeRow: any[] = [];
 
-      // 2. Ambil rincian nilai tugas harian dari student_daily_grades
-      const [dailyGrades]: any = await db.query(
-        "SELECT assignment_name, score FROM student_daily_grades WHERE student_period_id = ? AND class_period_id = ?",
-        [spId, classPeriodId]
-      );
+      if (classSubjectId) {
+        // 1. Ambil nilai sumatif (UTS, UAS) & status dari tabel grades
+        const [gRows]: any = await db.query(
+          "SELECT daily_assignment, ekskul, uts, uas, average, status FROM grades WHERE student_period_id = ? AND class_subject_id = ? LIMIT 1",
+          [spId, classSubjectId]
+        );
+        gradeRow = gRows;
+
+        // 2. Ambil rincian nilai tugas harian dari student_daily_grades
+        const [dgRows]: any = await db.query(
+          "SELECT assignment_name, score FROM student_daily_grades WHERE student_period_id = ? AND class_subject_id = ?",
+          [spId, classSubjectId]
+        );
+        dailyGrades = dgRows;
+      }
 
       let dailyAssignmentAvg = gradeRow[0]?.daily_assignment || 0;
       if (dailyGrades && dailyGrades.length > 0) {
@@ -80,8 +88,8 @@ export async function GET(request: Request) {
           COUNT(*) AS total,
           SUM(CASE WHEN status = 'Hadir' THEN 1 ELSE 0 END) AS present
          FROM student_attendance 
-         WHERE student_period_id = ?`,
-        [spId]
+         WHERE student_period_id = ? ${classSubjectId ? "AND class_subject_id = ?" : ""}`,
+        classSubjectId ? [spId, classSubjectId] : [spId]
       );
       
       const totalAttendance = attendanceRow[0]?.total || 0;
@@ -122,7 +130,7 @@ export async function GET(request: Request) {
     );
     const periodName = periodRows[0] 
       ? `TA ${periodRows[0].academic_year} - ${periodRows[0].semester}` 
-      : "";
+      : "—";
 
     return NextResponse.json({
       success: true,
@@ -130,8 +138,8 @@ export async function GET(request: Request) {
       stats: {
         totalStudents,
         belowKKM,
-        academicYear: periodRows[0]?.academic_year || "",
-        semester: periodRows[0]?.semester || "",
+        academicYear: periodRows[0]?.academic_year || "—",
+        semester: periodRows[0]?.semester || "—",
         periodName,
       },
     });
@@ -146,11 +154,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { studentId, classId, periodId, type, assignmentName, score, uts, uas, ekskul } = await request.json();
+    const { studentId, classId, periodId, classSubjectId, type, assignmentName, score, uts, uas, ekskul } = await request.json();
 
-    if (!studentId || !classId) {
+    if (!studentId || !classId || !classSubjectId) {
       return NextResponse.json(
-        { success: false, message: "studentId dan classId wajib diisi" },
+        { success: false, message: "studentId, classId, dan classSubjectId wajib diisi" },
         { status: 400 }
       );
     }
@@ -163,13 +171,6 @@ export async function POST(request: Request) {
       activePeriodId = activePeriod[0]?.id || 1;
     }
 
-    // Resolve class_period_id
-    const [classPeriodRow]: any = await db.query(
-      "SELECT id FROM class_periods WHERE class_id = ? AND period_id = ?",
-      [classId, activePeriodId]
-    );
-    const classPeriodId = classPeriodRow[0]?.id;
-
     // Resolve student_period_id
     const [studentPeriodRow]: any = await db.query(
       "SELECT id FROM student_periods WHERE student_id = ? AND period_id = ?",
@@ -177,9 +178,9 @@ export async function POST(request: Request) {
     );
     const studentPeriodId = studentPeriodRow[0]?.id;
 
-    if (!classPeriodId || !studentPeriodId) {
+    if (!studentPeriodId) {
       return NextResponse.json(
-        { success: false, message: "Relasi siswa atau kelas pada periode ini tidak ditemukan" },
+        { success: false, message: "Relasi siswa pada periode ini tidak ditemukan" },
         { status: 404 }
       );
     }
@@ -193,20 +194,20 @@ export async function POST(request: Request) {
       }
 
       await db.query(
-        `INSERT INTO student_daily_grades (student_period_id, class_period_id, assignment_name, score)
+        `INSERT INTO student_daily_grades (student_period_id, class_subject_id, assignment_name, score)
          VALUES (?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE score = ?`,
-        [studentPeriodId, classPeriodId, assignmentName, score, score]
+        [studentPeriodId, classSubjectId, assignmentName, score, score]
       );
 
       const [dailyGrades]: any = await db.query(
-        "SELECT score FROM student_daily_grades WHERE student_period_id = ? AND class_period_id = ?",
-        [studentPeriodId, classPeriodId]
+        "SELECT score FROM student_daily_grades WHERE student_period_id = ? AND class_subject_id = ?",
+        [studentPeriodId, classSubjectId]
       );
       const sum = dailyGrades.reduce((acc: number, item: any) => acc + parseFloat(item.score || 0), 0);
       const dailyAssignmentAvg = sum / dailyGrades.length;
 
-      await updateMasterGrades(studentPeriodId, classPeriodId, dailyAssignmentAvg, null, null, null);
+      await updateMasterGrades(studentPeriodId, classSubjectId, dailyAssignmentAvg, null, null, null);
 
       return NextResponse.json({
         success: true,
@@ -215,7 +216,7 @@ export async function POST(request: Request) {
     }
 
     if (type === "term") {
-      await updateMasterGrades(studentPeriodId, classPeriodId, null, uts, uas, ekskul);
+      await updateMasterGrades(studentPeriodId, classSubjectId, null, uts, uas, ekskul);
       return NextResponse.json({
         success: true,
         message: "Nilai UTS/UAS berhasil disimpan",
@@ -238,15 +239,15 @@ export async function POST(request: Request) {
 
 async function updateMasterGrades(
   studentPeriodId: any,
-  classPeriodId: any,
+  classSubjectId: any,
   dailyAssignment: number | null,
   uts: number | null,
   uas: number | null,
   ekskul: number | null
 ) {
   const [existing]: any = await db.query(
-    "SELECT id, daily_assignment, uts, uas, ekskul FROM grades WHERE student_period_id = ? AND class_period_id = ? LIMIT 1",
-    [studentPeriodId, classPeriodId]
+    "SELECT id, daily_assignment, uts, uas, ekskul FROM grades WHERE student_period_id = ? AND class_subject_id = ? LIMIT 1",
+    [studentPeriodId, classSubjectId]
   );
 
   let newDaily = dailyAssignment !== null ? dailyAssignment : (existing[0]?.daily_assignment || 0);
@@ -266,9 +267,9 @@ async function updateMasterGrades(
     );
   } else {
     await db.query(
-      `INSERT INTO grades (student_period_id, class_period_id, daily_assignment, uts, uas, ekskul, average, status)
+      `INSERT INTO grades (student_period_id, class_subject_id, daily_assignment, uts, uas, ekskul, average, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [studentPeriodId, classPeriodId, newDaily, newUts, newUas, newEkskul, average, status]
+      [studentPeriodId, classSubjectId, newDaily, newUts, newUas, newEkskul, average, status]
     );
   }
 }

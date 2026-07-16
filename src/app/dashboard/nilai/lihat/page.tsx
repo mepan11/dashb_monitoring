@@ -64,6 +64,10 @@ function ViewGradesContent() {
   const [loading, setLoading] = useState(true);
   const [periodId, setPeriodId] = useState<string>("");
 
+  // Subjects states
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
+
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<StudentGrade | null>(null);
@@ -93,11 +97,40 @@ function ViewGradesContent() {
     };
   }, []);
 
+  // Fetch subjects when class or period changes
+  useEffect(() => {
+    if (!classId || !periodId) {
+      setSubjects([]);
+      setSelectedSubjectId("");
+      return;
+    }
+    async function fetchSubjects() {
+      try {
+        const res = await fetch(`/api/classes/${classId}/subjects?period_id=${periodId}`);
+        const json = await res.json();
+        if (json.success) {
+          setSubjects(json.data);
+          if (json.data.length > 0) {
+            setSelectedSubjectId(String(json.data[0].id));
+          } else {
+            setSelectedSubjectId("");
+          }
+        }
+      } catch (err) {
+        console.error("Error loading subjects:", err);
+      }
+    }
+    fetchSubjects();
+  }, [classId, periodId]);
+
   const fetchGrades = async () => {
     if (!classId) return;
     try {
       setLoading(true);
-      const res = await fetch(`/api/grades?class_id=${classId}&period_id=${periodId}`);
+      const subjectObj = subjects.find(s => String(s.id) === String(selectedSubjectId));
+      const classSubjectId = subjectObj ? subjectObj.classSubjectId : "";
+
+      const res = await fetch(`/api/grades?class_id=${classId}&period_id=${periodId}&class_subject_id=${classSubjectId}`);
       const json = await res.json();
       if (json.success) {
         setStudents(json.data);
@@ -112,7 +145,7 @@ function ViewGradesContent() {
 
   useEffect(() => {
     fetchGrades();
-  }, [classId, periodId]);
+  }, [classId, periodId, selectedSubjectId, subjects]);
 
   const handleOpenEditModal = (student: StudentGrade, mode: "daily" | "term") => {
     setSelectedStudent(student);
@@ -132,6 +165,9 @@ function ViewGradesContent() {
     if (!selectedStudent || !newAssignmentName || !newAssignmentScore) return;
 
     try {
+      const subjectObj = subjects.find(s => String(s.id) === String(selectedSubjectId));
+      const classSubjectId = subjectObj ? subjectObj.classSubjectId : "";
+
       const res = await fetch("/api/grades", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -139,6 +175,7 @@ function ViewGradesContent() {
           studentId: selectedStudent.id,
           classId,
           periodId,
+          classSubjectId,
           type: "daily",
           assignmentName: newAssignmentName,
           score: parseFloat(newAssignmentScore),
@@ -152,7 +189,7 @@ function ViewGradesContent() {
         setNewAssignmentScore("");
         
         // Refresh modal data
-        const updatedRes = await fetch(`/api/grades?class_id=${classId}&period_id=${periodId}`);
+        const updatedRes = await fetch(`/api/grades?class_id=${classId}&period_id=${periodId}&class_subject_id=${classSubjectId}`);
         const updatedJson = await updatedRes.json();
         if (updatedJson.success) {
           setStudents(updatedJson.data);
@@ -177,6 +214,9 @@ function ViewGradesContent() {
     if (!selectedStudent) return;
 
     try {
+      const subjectObj = subjects.find(s => String(s.id) === String(selectedSubjectId));
+      const classSubjectId = subjectObj ? subjectObj.classSubjectId : "";
+
       const res = await fetch("/api/grades", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -184,6 +224,7 @@ function ViewGradesContent() {
           studentId: selectedStudent.id,
           classId,
           periodId,
+          classSubjectId,
           type: "term",
           uts: parseFloat(inputUts) || 0,
           uas: parseFloat(inputUas) || 0,
@@ -293,18 +334,38 @@ function ViewGradesContent() {
         <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <h2 className="text-lg font-extrabold text-slate-800">Daftar Nilai Siswa</h2>
 
-          {/* Search Input */}
-          <div className="relative flex-1 max-w-xs">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-              <Search className="w-4 h-4" />
-            </span>
-            <input
-              type="text"
-              placeholder="Cari Nama Siswa..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-[#f4f7fc] border border-slate-100/50 rounded-lg text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-            />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            {/* Subject Selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Mata Pelajaran:</span>
+              <select
+                value={selectedSubjectId}
+                onChange={(e) => setSelectedSubjectId(e.target.value)}
+                disabled={subjects.length === 0}
+                className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-600 disabled:opacity-50"
+              >
+                <option value="">-- Pilih Mata Pelajaran --</option>
+                {subjects.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-xs">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                <Search className="w-4 h-4" />
+              </span>
+              <input
+                type="text"
+                placeholder="Cari Nama Siswa..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-[#f4f7fc] border border-slate-100/50 rounded-lg text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              />
+            </div>
           </div>
         </div>
 

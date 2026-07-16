@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
 export async function GET(request: Request) {
@@ -99,7 +99,29 @@ export async function GET(request: Request) {
         JOIN subjects s_sub ON sp_sub.subject_id = s_sub.id 
         WHERE s_sub.name = ? AND sp_sub.period_id = ?
       )`);
-      queryParams.push(subjectFilter, activePeriodId);
+    }
+
+    const availableHomeroom = url.searchParams.get("available_homeroom") === "true";
+    const currentHomeroomTeacherId = url.searchParams.get("current_homeroom_teacher_id");
+
+    if (availableHomeroom) {
+      if (currentHomeroomTeacherId && currentHomeroomTeacherId !== "null" && currentHomeroomTeacherId !== "undefined" && currentHomeroomTeacherId !== "") {
+        conditions.push(`(
+          tp.id NOT IN (
+            SELECT homeroom_teacher_id 
+            FROM class_periods 
+            WHERE period_id = ? AND homeroom_teacher_id IS NOT NULL
+          ) OR t.id = ?
+        )`);
+        queryParams.push(activePeriodId, currentHomeroomTeacherId);
+      } else {
+        conditions.push(`tp.id NOT IN (
+          SELECT homeroom_teacher_id 
+          FROM class_periods 
+          WHERE period_id = ? AND homeroom_teacher_id IS NOT NULL
+        )`);
+        queryParams.push(activePeriodId);
+      }
     }
 
     // Get total count of filtered records

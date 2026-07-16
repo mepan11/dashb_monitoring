@@ -23,6 +23,24 @@ interface CoachRow {
   initials: string;
   status: string | null;
   checkInTime: string | null;
+  checkOutTime: string | null;
+}
+
+function formatForDatetimeLocal(val: string | null, defaultDate: string) {
+  if (!val || val === "-- : --") return "";
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(val)) return val;
+  if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}(:\d{2})?$/.test(val)) {
+    return val.replace(" ", "T").substring(0, 16);
+  }
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(val)) {
+    return `${defaultDate}T${val.substring(0, 5)}`;
+  }
+  return "";
+}
+
+function formatFromDatetimeLocal(val: string) {
+  if (!val) return "";
+  return val.replace("T", " ");
 }
 
 export default function CoachAttendancePage() {
@@ -37,6 +55,8 @@ export default function CoachAttendancePage() {
 
   // Attendance state: map of coachId -> status
   const [attendance, setAttendance] = useState<Record<string, string>>({});
+  const [checkInTimes, setCheckInTimes] = useState<Record<string, string>>({});
+  const [checkOutTimes, setCheckOutTimes] = useState<Record<string, string>>({});
 
   const today = new Date().toISOString().split("T")[0];
   const [selectedDate, setSelectedDate] = useState(today);
@@ -69,11 +89,17 @@ export default function CoachAttendancePage() {
       const json = await res.json();
       if (json.success) {
         setCoaches(json.data);
-        const initial: Record<string, string> = {};
+        const initialStatus: Record<string, string> = {};
+        const initialCheckIn: Record<string, string> = {};
+        const initialCheckOut: Record<string, string> = {};
         json.data.forEach((c: CoachRow) => {
-          if (c.status) initial[c.id] = c.status;
+          if (c.status) initialStatus[c.id] = c.status;
+          initialCheckIn[c.id] = formatForDatetimeLocal(c.checkInTime, selectedDate);
+          initialCheckOut[c.id] = formatForDatetimeLocal(c.checkOutTime, selectedDate);
         });
-        setAttendance(initial);
+        setAttendance(initialStatus);
+        setCheckInTimes(initialCheckIn);
+        setCheckOutTimes(initialCheckOut);
       }
     } catch (err) {
       console.error("Failed to fetch coaches:", err);
@@ -90,9 +116,11 @@ export default function CoachAttendancePage() {
     if (!periodId) return;
     setSaving(true);
     try {
-      const attendanceRecords = Object.entries(attendance).map(([coachId, status]) => ({
-        coachId,
-        status,
+      const attendanceRecords = coaches.map((c) => ({
+        coachId: c.id,
+        status: attendance[c.id] || "",
+        checkInTime: formatFromDatetimeLocal(checkInTimes[c.id] || ""),
+        checkOutTime: formatFromDatetimeLocal(checkOutTimes[c.id] || ""),
       }));
       const res = await fetch("/api/absensi", {
         method: "POST",
@@ -265,7 +293,8 @@ export default function CoachAttendancePage() {
               <tr className="border-b border-slate-100 bg-[#fafbfc] text-[10px] font-extrabold text-slate-400 tracking-wider">
                 <th className="py-4 px-6">NAMA COACH</th>
                 <th className="py-4 px-6">ID COACH</th>
-                <th className="py-4 px-6">WAKTU PRESENSI</th>
+                <th className="py-4 px-6">WAKTU MASUK</th>
+                <th className="py-4 px-6">WAKTU KELUAR</th>
                 <th className="py-4 px-6">STATUS KEHADIRAN</th>
                 <th className="py-4 px-6 text-center">AKSI</th>
               </tr>
@@ -307,9 +336,28 @@ export default function CoachAttendancePage() {
                       {/* ID Number */}
                       <td className="py-4 px-6 text-slate-500">{row.idNumber || "—"}</td>
 
-                      {/* Check-in time */}
-                      <td className="py-4 px-6 font-medium text-slate-500">
-                        {row.checkInTime ? `${row.checkInTime} WIB` : "— : —"}
+                      {/* Waktu Masuk */}
+                      <td className="py-4 px-6">
+                        <input
+                          type="datetime-local"
+                          value={checkInTimes[row.id] || ""}
+                          onChange={(e) =>
+                            setCheckInTimes((prev) => ({ ...prev, [row.id]: e.target.value }))
+                          }
+                          className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white transition-all text-slate-800"
+                        />
+                      </td>
+
+                      {/* Waktu Keluar */}
+                      <td className="py-4 px-6">
+                        <input
+                          type="datetime-local"
+                          value={checkOutTimes[row.id] || ""}
+                          onChange={(e) =>
+                            setCheckOutTimes((prev) => ({ ...prev, [row.id]: e.target.value }))
+                          }
+                          className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white transition-all text-slate-800"
+                        />
                       </td>
 
                       {/* Status Selector */}
@@ -319,17 +367,16 @@ export default function CoachAttendancePage() {
                           onChange={(e) =>
                             setAttendance((prev) => ({ ...prev, [row.id]: e.target.value }))
                           }
-                          className={`text-[11px] font-bold px-3 py-1.5 rounded-full border outline-none cursor-pointer ${
-                            currentStatus === "Hadir"
-                              ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                              : currentStatus === "Terlambat"
+                          className={`text-[11px] font-bold px-3 py-1.5 rounded-full border outline-none cursor-pointer ${currentStatus === "Hadir"
+                            ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                            : currentStatus === "Terlambat"
                               ? "bg-amber-50 text-amber-600 border-amber-100"
                               : currentStatus === "Izin"
-                              ? "bg-blue-50 text-blue-600 border-blue-100"
-                              : currentStatus === "Absen"
-                              ? "bg-rose-50 text-rose-600 border-rose-100"
-                              : "bg-slate-50 text-slate-400 border-slate-100"
-                          }`}
+                                ? "bg-blue-50 text-blue-600 border-blue-100"
+                                : currentStatus === "Absen"
+                                  ? "bg-rose-50 text-rose-600 border-rose-100"
+                                  : "bg-slate-50 text-slate-400 border-slate-100"
+                            }`}
                         >
                           <option value="">— Pilih Status —</option>
                           <option value="Hadir">Hadir</option>
@@ -374,11 +421,10 @@ export default function CoachAttendancePage() {
               <button
                 key={p}
                 onClick={() => setCurrentPage(p)}
-                className={`w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center ${
-                  p === currentPage
-                    ? "bg-[#2563eb] text-white shadow-sm"
-                    : "hover:bg-slate-50 text-slate-600"
-                }`}
+                className={`w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center ${p === currentPage
+                  ? "bg-[#2563eb] text-white shadow-sm"
+                  : "hover:bg-slate-50 text-slate-600"
+                  }`}
               >
                 {p}
               </button>
