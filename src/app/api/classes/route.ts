@@ -90,6 +90,14 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const userRole = request.headers.get("x-user-role");
+    if (userRole === "guru") {
+      return NextResponse.json(
+        { success: false, message: "Akses ditolak: Hanya Admin yang dapat membuat kelas baru" },
+        { status: 403 }
+      );
+    }
+
     const { className, homeroomTeacherId, capacity, periodId } = await request.json();
 
     if (!className) {

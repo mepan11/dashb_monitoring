@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import bcrypt from "bcryptjs";
 
 export async function GET(request: Request) {
   try {
@@ -277,6 +278,26 @@ export async function POST(request: Request) {
         [name, email, nip, specialization || "Akademik", status || "Aktif"]
       );
       teacherId = insertRes.insertId;
+    }
+
+    // 1b. Sync/Create user login credentials
+    const [existingUser]: any = await db.query(
+      "SELECT id FROM users WHERE email = ?",
+      [email]
+    );
+
+    if (existingUser.length > 0) {
+      await db.query(
+        "UPDATE users SET name = ?, role = 'teacher' WHERE email = ?",
+        [name, email]
+      );
+    } else {
+      const salt = await bcrypt.genSalt(10);
+      const defaultHash = await bcrypt.hash("password123", salt);
+      await db.query(
+        "INSERT INTO users (name, email, role, password_hash) VALUES (?, ?, 'teacher', ?)",
+        [name, email, defaultHash]
+      );
     }
 
     // 2. Hubungkan ke periode akademik

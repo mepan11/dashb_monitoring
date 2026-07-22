@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useRole } from "@/lib/useRole";
 import {
   Cpu,
   Users,
@@ -48,6 +49,7 @@ const LIMIT = 10;
 function ExtracurricularDetailContent() {
   const searchParams = useSearchParams();
   const ekskulId = searchParams.get("id") || "1";
+  const { isAdmin } = useRole();
 
   // Data State
   const [ekskulName, setEkskulName] = useState("Ekstrakurikuler...");
@@ -316,13 +318,15 @@ function ExtracurricularDetailContent() {
             <Download className="w-4 h-4 text-slate-400" />
             Unduh Daftar Siswa
           </Button>
-          <button
-            onClick={() => setIsStudentModalOpen(true)}
-            className="flex-1 md:flex-initial py-2.5 px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]"
-          >
-            <UserPlus className="w-4 h-4" />
-            Tambah Siswa
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setIsStudentModalOpen(true)}
+              className="flex-1 md:flex-initial py-2.5 px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]"
+            >
+              <UserPlus className="w-4 h-4" />
+              Tambah Siswa
+            </button>
+          )}
         </div>
       </div>
 
@@ -333,12 +337,14 @@ function ExtracurricularDetailContent() {
         <div className="w-full lg:w-[320px] bg-white border border-slate-100 rounded-3xl p-6 shadow-[0_4px_25px_rgb(0,0,0,0.02)] flex flex-col gap-6 shrink-0 relative">
           <div className="flex justify-between items-center border-b border-slate-100/50 pb-4">
             <h3 className="text-base font-extrabold text-slate-800">Pelatih Utama</h3>
-            <button
-              onClick={() => setIsCoachModalOpen(true)}
-              className="p-1.5 text-slate-400 hover:bg-slate-55 hover:text-slate-700 rounded-lg transition-all border border-slate-100"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setIsCoachModalOpen(true)}
+                className="p-1.5 text-slate-400 hover:bg-slate-55 hover:text-slate-700 rounded-lg transition-all border border-slate-100"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Coach Avatar/Photo and badge */}
@@ -429,19 +435,19 @@ function ExtracurricularDetailContent() {
                   <th className="py-4 px-6">Kelas</th>
                   <th className="py-4 px-6">NISN</th>
                   <th className="py-4 px-6">Status</th>
-                  <th className="py-4 px-6 text-center">Aksi</th>
+                  {isAdmin && <th className="py-4 px-6 text-center">Aksi</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-semibold">
                 {loadingStudents ? (
                   <tr>
-                    <td colSpan={5} className="py-16 text-center text-slate-400 font-bold">
+                    <td colSpan={isAdmin ? 5 : 4} className="py-16 text-center text-slate-400 font-bold">
                       Memuat daftar partisipasi...
                     </td>
                   </tr>
                 ) : paginatedStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-16 text-center text-slate-400 font-bold">
+                    <td colSpan={isAdmin ? 5 : 4} className="py-16 text-center text-slate-400 font-bold">
                       Tidak ada siswa terdaftar pada program ini.
                     </td>
                   </tr>
@@ -479,14 +485,16 @@ function ExtracurricularDetailContent() {
                         </span>
                       </td>
 
-                      <td className="py-4 px-6 text-center">
-                        <button
-                          onClick={() => handleDeleteStudent(row.id, row.name)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
+                      {isAdmin && (
+                        <td className="py-4 px-6 text-center">
+                          <button
+                            onClick={() => handleDeleteStudent(row.id, row.name)}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}

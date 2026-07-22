@@ -14,6 +14,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 
 interface SubjectRow {
   id: string;
@@ -30,9 +31,14 @@ function SubjectDetailContent() {
   const searchParams = useSearchParams();
   const classId = searchParams.get("class_id") || "1";
 
+  const { role, isAdmin, isTeacher } = useRole();
+  const [isHomeroomClass, setIsHomeroomClass] = useState(false);
+  const canCRUD = isAdmin || (isTeacher && isHomeroomClass);
+
   const [className, setClassName] = useState("Kelas ...");
   const [academicYear, setAcademicYear] = useState("2025/2026");
   const [subjects, setSubjects] = useState<SubjectRow[]>([]);
+  const [ekskulCount, setEkskulCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOption, setSortOption] = useState("Urutkan: Nama (A-Z)");
@@ -40,12 +46,31 @@ function SubjectDetailContent() {
   const fetchSubjects = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/classes/${classId}/subjects`);
+      const userStr = localStorage.getItem("user");
+      let teacherEmailParam = "";
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.role === "guru" && u.email) {
+          teacherEmailParam = `?teacher_email=${encodeURIComponent(u.email)}`;
+        }
+      }
+      const separator = teacherEmailParam ? "&" : "?";
+      const cachedPeriodId = localStorage.getItem("active_period_id") || "";
+      const periodParam = cachedPeriodId ? `${separator}period_id=${cachedPeriodId}` : "";
+
+      const res = await fetch(`/api/classes/${classId}/subjects${teacherEmailParam}${periodParam}`);
       const json = await res.json();
       if (json.success) {
         setClassName(json.className);
         setAcademicYear(json.academicYear);
         setSubjects(json.data);
+        setIsHomeroomClass(!!json.isHomeroomClass);
+      }
+
+      const ekskulRes = await fetch(`/api/extracurriculars?period_id=${cachedPeriodId}`);
+      const ekskulJson = await ekskulRes.json();
+      if (ekskulJson.success) {
+        setEkskulCount(ekskulJson.data?.length || 0);
       }
     } catch (err) {
       console.error("Failed to fetch subjects:", err);
@@ -61,8 +86,19 @@ function SubjectDetailContent() {
   const handleDelete = async (subjectId: string, name: string) => {
     if (!confirm(`Hapus mata pelajaran "${name}" dari kurikulum kelas ${className}?`)) return;
     try {
-      const res = await fetch(`/api/classes/${classId}/subjects?subjectId=${subjectId}`, {
+      const userStr = localStorage.getItem("user");
+      const headers: Record<string, string> = {};
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.role) headers["x-user-role"] = u.role;
+        if (u.email) headers["x-user-email"] = u.email;
+      }
+      const cachedPeriodId = localStorage.getItem("active_period_id") || "";
+      const periodParam = cachedPeriodId ? `&period_id=${cachedPeriodId}` : "";
+
+      const res = await fetch(`/api/classes/${classId}/subjects?subjectId=${subjectId}${periodParam}`, {
         method: "DELETE",
+        headers,
       });
       const json = await res.json();
       if (json.success) {
@@ -78,7 +114,6 @@ function SubjectDetailContent() {
   // Stats calculation
   const totalSubjects = subjects.length;
   const akademikCount = subjects.filter((s) => s.category === "AKADEMIK").length;
-  const nonAkademikCount = subjects.filter((s) => s.category === "NON-AKADEMIK").length;
 
   const stats = [
     {
@@ -89,15 +124,15 @@ function SubjectDetailContent() {
       iconColor: "text-blue-600",
     },
     {
-      title: "Mata Pelajaran Akademik",
+      title: "Mata Pelajaran (Akademik)",
       value: akademikCount,
       icon: GraduationCap,
       iconBg: "bg-emerald-50",
       iconColor: "text-emerald-600",
     },
     {
-      title: "Non-Akademik / Ekskul",
-      value: nonAkademikCount,
+      title: "Ekstrakurikuler (Non-Akademik)",
+      value: ekskulCount,
       icon: Palette,
       iconBg: "bg-amber-50",
       iconColor: "text-amber-600",
@@ -132,14 +167,16 @@ function SubjectDetailContent() {
         </div>
 
         {/* Top actions */}
-        <div className="self-stretch xl:self-auto">
-          <Link href={`/dashboard/mapel/tambah?class_id=${classId}`}>
-            <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]">
-              <Plus className="w-4 h-4" />
-              Tambah Mata Pelajaran
-            </Button>
-          </Link>
-        </div>
+        {canCRUD && (
+          <div className="self-stretch xl:self-auto">
+            <Link href={`/dashboard/mapel/tambah?class_id=${classId}`}>
+              <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]">
+                <Plus className="w-4 h-4" />
+                Tambah Mata Pelajaran
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* KPI Cards Grid */}
@@ -271,20 +308,22 @@ function SubjectDetailContent() {
 
                     {/* Actions */}
                     <td className="py-4 px-6 text-center">
-                      <div className="flex items-center justify-center gap-2.5">
-                        <Link
-                          href={`/dashboard/mapel/edit?class_id=${classId}&subject_id=${subject.id}`}
-                          className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Link>
-                        <button
-                          onClick={() => handleDelete(subject.id, subject.name)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {canCRUD && (
+                        <div className="flex items-center justify-center gap-2.5">
+                          <Link
+                            href={`/dashboard/mapel/edit?class_id=${classId}&subject_id=${subject.id}`}
+                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Link>
+                          <button
+                            onClick={() => handleDelete(subject.id, subject.name)}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </td>
 
                   </tr>

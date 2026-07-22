@@ -898,25 +898,27 @@ export default function AbsensiPage() {
       {activeTab === "monitoring" && (
         <>
           {/* KPI Cards Grid */}
-          <div className={`grid grid-cols-1 sm:grid-cols-2 ${role === "guru" ? "lg:grid-cols-2" : "lg:grid-cols-4"} gap-6`}>
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${role === "guru" || role === "coach" ? "lg:grid-cols-2" : "lg:grid-cols-4"} gap-6`}>
             {/* Presensi Guru */}
-            <Link href="/dashboard/absensi/guru" className="block hover:opacity-95 transition-all">
-              <div className="bg-white border border-slate-100 p-6 rounded-2xl flex flex-col gap-4 shadow-[0_4px_20px_rgb(0,0,0,0.02)] h-full">
-                <div className="flex justify-between items-start">
-                  <div className="p-3 rounded-lg bg-blue-50 text-[#2563eb]">
-                    <GraduationCap className="w-5 h-5" />
+            {role !== "coach" && (
+              <Link href="/dashboard/absensi/guru" className="block hover:opacity-95 transition-all">
+                <div className="bg-white border border-slate-100 p-6 rounded-2xl flex flex-col gap-4 shadow-[0_4px_20px_rgb(0,0,0,0.02)] h-full">
+                  <div className="flex justify-between items-start">
+                    <div className="p-3 rounded-lg bg-blue-50 text-[#2563eb]">
+                      <GraduationCap className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-semibold text-slate-400">Presensi Guru</span>
+                    <span className="text-3xl font-extrabold text-slate-800 mt-2">{teacherRate}</span>
+                    <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 mt-3">
+                      <TrendingUp className="w-3.5 h-3.5" />
+                      <span>+1.5% dari bulan lalu</span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-slate-400">Presensi Guru</span>
-                  <span className="text-3xl font-extrabold text-slate-800 mt-2">{teacherRate}</span>
-                  <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 mt-3">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    <span>+1.5% dari bulan lalu</span>
-                  </div>
-                </div>
-              </div>
-            </Link>
+              </Link>
+            )}
 
             {/* Presensi Coach */}
             {role !== "guru" && (
@@ -939,23 +941,25 @@ export default function AbsensiPage() {
             )}
 
             {/* Presensi Siswa */}
-            <Link href="/dashboard/absensi/siswa" className="block hover:opacity-95 transition-all">
-              <div className="bg-white border border-slate-100 p-6 rounded-2xl flex flex-col gap-4 shadow-[0_4px_20px_rgb(0,0,0,0.02)] h-full">
-                <div className="flex justify-between items-start">
-                  <div className="p-3 rounded-lg bg-amber-50 text-amber-600">
-                    <User className="w-5 h-5" />
+            {role !== "coach" && (
+              <Link href="/dashboard/absensi/siswa" className="block hover:opacity-95 transition-all">
+                <div className="bg-white border border-slate-100 p-6 rounded-2xl flex flex-col gap-4 shadow-[0_4px_20px_rgb(0,0,0,0.02)] h-full">
+                  <div className="flex justify-between items-start">
+                    <div className="p-3 rounded-lg bg-amber-50 text-amber-600">
+                      <User className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-semibold text-slate-400">Presensi Siswa</span>
+                    <span className="text-3xl font-extrabold text-slate-800 mt-2">{studentRate}</span>
+                    <div className="flex items-center gap-1 text-[10px] font-bold text-rose-500 mt-3">
+                      <TrendingDown className="w-3.5 h-3.5" />
+                      <span>-0.8% karena musim flu</span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-slate-400">Presensi Siswa</span>
-                  <span className="text-3xl font-extrabold text-slate-800 mt-2">{studentRate}</span>
-                  <div className="flex items-center gap-1 text-[10px] font-bold text-rose-500 mt-3">
-                    <TrendingDown className="w-3.5 h-3.5" />
-                    <span>-0.8% karena musim flu</span>
-                  </div>
-                </div>
-              </div>
-            </Link>
+              </Link>
+            )}
 
             {/* Presensi Ekskul */}
             {role !== "guru" && (
@@ -1274,7 +1278,8 @@ export default function AbsensiPage() {
                                       key={st}
                                       type="button"
                                       onClick={() => handleStudentAttChange(student.id, st)}
-                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${currentStatus === st
+                                      disabled={isReadOnly}
+                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all disabled:opacity-60 disabled:cursor-not-allowed ${currentStatus === st
                                           ? st === "Hadir"
                                             ? "bg-emerald-50 text-emerald-600 border-emerald-200"
                                             : st === "Sakit"
@@ -1358,7 +1363,8 @@ export default function AbsensiPage() {
                                     onChange={(e) =>
                                       handleTeacherAttChange(teacher.id, { checkInTime: e.target.value })
                                     }
-                                    className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white text-slate-800 transition-all font-semibold"
+                                    disabled={isReadOnly}
+                                    className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white text-slate-800 transition-all font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                                   />
                                 )}
                               </td>
@@ -1372,7 +1378,8 @@ export default function AbsensiPage() {
                                     onChange={(e) =>
                                       handleTeacherAttChange(teacher.id, { checkOutTime: e.target.value })
                                     }
-                                    className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white text-slate-800 transition-all font-semibold"
+                                    disabled={isReadOnly}
+                                    className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white text-slate-800 transition-all font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                                   />
                                 )}
                               </td>
@@ -1383,7 +1390,8 @@ export default function AbsensiPage() {
                                       key={st}
                                       type="button"
                                       onClick={() => handleTeacherAttChange(teacher.id, { status: st })}
-                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                                      disabled={isReadOnly}
+                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
                                         state.status === st
                                           ? st === "Hadir"
                                             ? "bg-emerald-50 text-emerald-600 border-emerald-200"
@@ -1466,7 +1474,8 @@ export default function AbsensiPage() {
                                     onChange={(e) =>
                                       handleCoachAttChange(coach.id, { checkInTime: e.target.value })
                                     }
-                                    className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white text-slate-800 transition-all font-semibold"
+                                    disabled={isReadOnly}
+                                    className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white text-slate-800 transition-all font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                                   />
                                 )}
                               </td>
@@ -1480,7 +1489,8 @@ export default function AbsensiPage() {
                                     onChange={(e) =>
                                       handleCoachAttChange(coach.id, { checkOutTime: e.target.value })
                                     }
-                                    className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white text-slate-800 transition-all font-semibold"
+                                    disabled={isReadOnly}
+                                    className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white text-slate-800 transition-all font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                                   />
                                 )}
                               </td>
@@ -1491,7 +1501,8 @@ export default function AbsensiPage() {
                                       key={st}
                                       type="button"
                                       onClick={() => handleCoachAttChange(coach.id, { status: st })}
-                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                                      disabled={isReadOnly}
+                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
                                         state.status === st
                                           ? st === "Hadir"
                                             ? "bg-emerald-50 text-emerald-600 border-emerald-200"
@@ -1579,7 +1590,8 @@ export default function AbsensiPage() {
                                       key={st}
                                       type="button"
                                       onClick={() => handleEkskulAttChange(student.id, st)}
-                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${currentStatus === st
+                                      disabled={isReadOnly}
+                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all disabled:opacity-60 disabled:cursor-not-allowed ${currentStatus === st
                                           ? st === "Hadir"
                                             ? "bg-emerald-50 text-emerald-600 border-emerald-200"
                                             : st === "Sakit"

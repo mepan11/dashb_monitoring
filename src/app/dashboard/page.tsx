@@ -57,7 +57,19 @@ export default function DashboardPage() {
     async function loadStats() {
       setLoading(true);
       try {
-        const queryParam = periodId ? `?period_id=${periodId}` : "";
+        const userStr = localStorage.getItem("user");
+        let coachEmailParam = "";
+        if (userStr) {
+          const u = JSON.parse(userStr);
+          if (u.role === "coach" && u.email) {
+            coachEmailParam = `&coach_email=${encodeURIComponent(u.email)}`;
+          }
+        }
+
+        const queryParam = periodId
+          ? `?period_id=${periodId}${coachEmailParam}&t=${Date.now()}`
+          : `?${coachEmailParam ? coachEmailParam.slice(1) + "&" : ""}t=${Date.now()}`;
+
         const res = await fetch(`/api/dashboard/stats${queryParam}`);
         const json = await res.json();
         if (json.success) {
@@ -72,9 +84,11 @@ export default function DashboardPage() {
     loadStats();
   }, [periodId]);
 
+  const isCoach = role === "coach";
+
   const stats = [
     {
-      title: "Total Siswa",
+      title: isCoach ? "Siswa Mengikuti Ekskul" : "Total Siswa",
       value: loading ? "—" : String(data?.totalStudents || 0),
       badge: "Aktif",
       badgeType: "success" as const,
@@ -82,7 +96,7 @@ export default function DashboardPage() {
       iconBg: "bg-blue-50",
       iconColor: "text-blue-600",
     },
-    ...(role !== "guru" ? [{
+    ...(!isCoach && role !== "guru" ? [{
       title: "Total Guru",
       value: loading ? "—" : String(data?.totalTeachers || 0),
       badge: "Aktif",
@@ -100,7 +114,7 @@ export default function DashboardPage() {
       iconBg: "bg-emerald-50",
       iconColor: "text-emerald-600",
     },
-    {
+    ...(!isCoach ? [{
       title: "Ruang Kelas",
       value: loading ? "—" : String(data?.totalClasses || 0),
       badge: "Tersedia",
@@ -108,7 +122,7 @@ export default function DashboardPage() {
       icon: DoorOpen,
       iconBg: "bg-rose-50",
       iconColor: "text-rose-600",
-    },
+    }] : []),
   ];
 
   return (
@@ -131,7 +145,7 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isCoach ? "lg:grid-cols-2" : "lg:grid-cols-4"} gap-6`}>
         {stats.map((stat, index) => (
           <StatCard
             key={index}

@@ -19,7 +19,7 @@ import { useRole } from "@/lib/useRole";
 interface AccountUser {
   id: string;
   name: string;
-  role: "Administrator" | "Guru" | "Coach" | "Wali Murid";
+  role: "Administrator" | "Guru" | "Coach" | "Wali Murid" | "Kepala Sekolah";
   email: string;
   lastLogin: string;
   status: "active" | "idle";
@@ -47,7 +47,7 @@ export default function KelolaAkunPage() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/users");
+      const res = await fetch(`/api/users?t=${Date.now()}`);
       const result = await res.json();
       if (result.success) {
         setAccounts(result.data);
@@ -94,12 +94,14 @@ export default function KelolaAkunPage() {
         return "bg-amber-50 text-amber-600 border border-amber-100";
       case "Wali Murid":
         return "bg-sky-50 text-sky-600 border border-sky-100";
+      case "Kepala Sekolah":
+        return "bg-indigo-50 text-indigo-600 border border-indigo-100";
       default:
         return "bg-slate-100 text-slate-600";
     }
   };
 
-  if (role === "guru" || role === "coach") {
+  if (role === "guru" || role === "coach" || role === "kepala_sekolah") {
     return (
       <div className="py-20 text-center text-slate-400 font-bold">
         <Ban className="w-12 h-12 text-rose-500 mx-auto mb-4" />

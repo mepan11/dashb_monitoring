@@ -27,7 +27,8 @@ interface EkskulInfo {
 }
 
 function NilaiEkskulContent() {
-  const { isReadOnly } = useRole();
+  const { role } = useRole();
+  const canEdit = role === "admin" || role === "coach";
   const searchParams = useSearchParams();
   const epId = searchParams.get("ep_id") || "";
 
@@ -44,7 +45,7 @@ function NilaiEkskulContent() {
     if (!epId) return;
     try {
       setLoading(true);
-      const res = await fetch(`/api/extracurricular-grades?extracurricular_period_id=${epId}`);
+      const res = await fetch(`/api/extracurricular-grades?extracurricular_period_id=${epId}&t=${Date.now()}`);
       const json = await res.json();
       if (json.success) {
         setStudents(json.data || []);
@@ -264,7 +265,7 @@ function NilaiEkskulContent() {
                   <th className="py-4 px-5 text-center">Gender</th>
                   <th className="py-4 px-5 text-center w-32">Nilai Ekskul</th>
                   <th className="py-4 px-5">Catatan</th>
-                  {!isReadOnly && <th className="py-4 px-5 text-center">Aksi</th>}
+                  {canEdit && <th className="py-4 px-5 text-center">Aksi</th>}
                 </tr>
               </thead>
               <tbody>
@@ -295,7 +296,7 @@ function NilaiEkskulContent() {
 
                       {/* Nilai Input */}
                       <td className="py-4 px-5 text-center">
-                        {isReadOnly ? (
+                        {!canEdit ? (
                           <span className="font-bold text-slate-700">{edit.score || "—"}</span>
                         ) : (
                           <input
@@ -318,7 +319,7 @@ function NilaiEkskulContent() {
 
                       {/* Catatan Input */}
                       <td className="py-4 px-5">
-                        {isReadOnly ? (
+                        {!canEdit ? (
                           <span className="text-slate-500 font-medium">{edit.notes || "—"}</span>
                         ) : (
                           <input
@@ -337,7 +338,7 @@ function NilaiEkskulContent() {
                       </td>
 
                       {/* Aksi */}
-                      {!isReadOnly && (
+                      {canEdit && (
                         <td className="py-4 px-5 text-center">
                           <button
                             onClick={() => handleSave(s.studentPeriodId)}

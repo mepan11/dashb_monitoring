@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
-import { Search, Bell, Settings, Calendar, User, LogOut } from "lucide-react";
+import { Search, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 interface AcademicPeriod {
@@ -39,14 +38,24 @@ export const Header: React.FC = () => {
           
           // Cek apakah sudah ada pilihan di localStorage
           const cached = localStorage.getItem("active_period_id");
+          let resolvedId = "";
+
           if (cached) {
             setSelectedPeriodId(cached);
+            resolvedId = cached;
           } else if (active) {
             setSelectedPeriodId(String(active.id));
             localStorage.setItem("active_period_id", String(active.id));
+            resolvedId = String(active.id);
           } else if (json.data.length > 0) {
             setSelectedPeriodId(String(json.data[0].id));
             localStorage.setItem("active_period_id", String(json.data[0].id));
+            resolvedId = String(json.data[0].id);
+          }
+
+          if (resolvedId) {
+            const event = new CustomEvent("academic_period_changed", { detail: { periodId: resolvedId } });
+            window.dispatchEvent(event);
           }
         }
       } catch (err) {
@@ -126,43 +135,6 @@ export const Header: React.FC = () => {
           Portal Sekolah
         </Button>
 
-        {/* Icons */}
-        <button className="p-2 text-slate-500 hover:bg-slate-50 rounded-full transition-all relative">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-        </button>
-
-        {/* Settings Dropdown Container */}
-        <div className="relative">
-          <button 
-            onClick={(e) => { e.stopPropagation(); setIsDropdownOpen(!isDropdownOpen); }}
-            className="p-2 text-slate-500 hover:bg-slate-50 rounded-full transition-all"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
-
-          {isDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-100 rounded-xl shadow-[0_4px_20px_rgb(0,0,0,0.08)] py-1.5 z-50">
-              <Link 
-                href="/dashboard/kelola-akun" 
-                onClick={() => setIsDropdownOpen(false)}
-                className="flex items-center gap-2.5 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all"
-              >
-                <User className="w-4 h-4 text-slate-400" />
-                Lihat Profil Akun
-              </Link>
-              <div className="h-px bg-slate-100 my-1"></div>
-              <Link 
-                href="/"
-                onClick={() => setIsDropdownOpen(false)}
-                className="flex items-center gap-2.5 px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition-all"
-              >
-                <LogOut className="w-4 h-4 text-red-500" />
-                Logout
-              </Link>
-            </div>
-          )}
-        </div>
       </div>
     </header>
   );

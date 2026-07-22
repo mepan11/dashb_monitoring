@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
@@ -17,6 +17,7 @@ import {
   BookOpen
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -30,6 +31,7 @@ interface StudentRow {
 }
 
 export default function ExtracurricularAttendancePage() {
+  const { role, isReadOnly } = useRole();
   const [periodId, setPeriodId] = useState("");
   const [periodName, setPeriodName] = useState("");
   const [extracurriculars, setExtracurriculars] = useState<any[]>([]);
@@ -411,14 +413,16 @@ export default function ExtracurricularAttendancePage() {
             />
           </div>
 
-          <Button
-            onClick={handleSaveAttendance}
-            disabled={saving || !periodId || !selectedEkskulId}
-            className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm disabled:opacity-50"
-          >
-            <Save className="w-4 h-4" />
-            {saving ? "Menyimpan..." : "Simpan Presensi"}
-          </Button>
+          {!isReadOnly && (
+            <Button
+              onClick={handleSaveAttendance}
+              disabled={saving || !periodId || !selectedEkskulId}
+              className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {saving ? "Menyimpan..." : "Simpan Presensi"}
+            </Button>
+          )}
 
           {/* Rekap Date Range */}
           <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-500 shadow-sm">
@@ -558,7 +562,8 @@ export default function ExtracurricularAttendancePage() {
                                 key={st}
                                 type="button"
                                 onClick={() => handleStudentAttChange(row.id, st)}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${currentStatus === st
+                                disabled={isReadOnly}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all disabled:opacity-60 disabled:cursor-not-allowed ${currentStatus === st
                                     ? st === "Hadir"
                                       ? "bg-emerald-50 text-emerald-600 border-emerald-200"
                                       : st === "Sakit"

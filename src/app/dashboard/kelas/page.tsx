@@ -27,7 +27,7 @@ interface ClassItem {
 }
 
 export default function KelasPage() {
-  const { isReadOnly } = useRole();
+  const { role, isReadOnly, isAdmin, isTeacher } = useRole();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedGradeFilter, setSelectedGradeFilter] = useState("Semua Kelas");
@@ -91,7 +91,17 @@ export default function KelasPage() {
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Hapus kelas "${name}"? Tindakan ini juga akan menghapus data terkait.`)) return;
     try {
-      const res = await fetch(`/api/classes/${id}`, { method: "DELETE" });
+      const userStr = localStorage.getItem("user");
+      const headers: Record<string, string> = {};
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.role) headers["x-user-role"] = u.role;
+        if (u.email) headers["x-user-email"] = u.email;
+      }
+      const res = await fetch(`/api/classes/${id}`, {
+        method: "DELETE",
+        headers,
+      });
       const json = await res.json();
       if (json.success) {
         fetchClasses(periodId);
@@ -123,7 +133,7 @@ export default function KelasPage() {
           </p>
         </div>
 
-        {!isReadOnly && (
+        {!isReadOnly && isAdmin && (
           <div className="flex flex-wrap items-center gap-3">
             <Link href="/dashboard/kelas/tambah">
               <Button className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]">
@@ -290,7 +300,7 @@ export default function KelasPage() {
                       Detail Kelas
                     </span>
                   </Link>
-                  {!isReadOnly && (
+                  {(isAdmin || (isTeacher && cls.isHomeroom === 1)) && (
                     <div className="flex items-center gap-2">
                       <Link href={`/dashboard/kelas/edit?id=${cls.id}`}>
                         <span className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg border border-slate-100 transition-all block cursor-pointer">

@@ -23,7 +23,7 @@ interface MasterSubject {
 const LIMIT = 10;
 
 export default function MapelPage() {
-  const { isReadOnly } = useRole();
+  const { isAdmin, isReadOnly } = useRole();
   const [activeTab, setActiveTab] = useState<"master" | "class">("master");
   const [periodId, setPeriodId] = useState<string>("");
   
@@ -376,7 +376,7 @@ export default function MapelPage() {
           </p>
         </div>
 
-        {activeTab === "master" && !isReadOnly && (
+        {activeTab === "master" && isAdmin && (
           <button
             onClick={handleOpenAddModal}
             className="!w-auto py-2.5 px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]"
@@ -517,7 +517,7 @@ export default function MapelPage() {
                             >
                               <BookOpen className="w-4 h-4" />
                             </button>
-                            {!isReadOnly && (
+                            {isAdmin && (
                               <>
                                 <button
                                   onClick={() => handleOpenEditModal(sub)}

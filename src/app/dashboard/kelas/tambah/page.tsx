@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { User, Info, GraduationCap, ChevronDown, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 
 interface TeacherOption {
   id: number;
@@ -13,6 +14,15 @@ interface TeacherOption {
 
 export default function TambahKelasPage() {
   const router = useRouter();
+  const { role, isTeacher, loading: roleLoading } = useRole();
+
+  useEffect(() => {
+    if (!roleLoading && isTeacher) {
+      alert("Anda tidak memiliki akses untuk menambah kelas baru!");
+      router.push("/dashboard/kelas");
+    }
+  }, [role, isTeacher, roleLoading, router]);
+
   const [className, setClassName] = useState("");
   const [homeroomTeacherId, setHomeroomTeacherId] = useState("");
   const [capacity, setCapacity] = useState(32);
@@ -25,6 +35,7 @@ export default function TambahKelasPage() {
 
   // Mendengarkan perubahan periode akademik
   useEffect(() => {
+    if (roleLoading || isTeacher) return;
     const cached = localStorage.getItem("active_period_id") || "";
     setPeriodId(cached);
 
@@ -40,7 +51,7 @@ export default function TambahKelasPage() {
 
   // Fetch data guru & periode setiap kali periodId berubah
   useEffect(() => {
-    if (!periodId) return;
+    if (!periodId || roleLoading || isTeacher) return;
 
     async function fetchTeachersAndPeriod() {
       try {
@@ -72,6 +83,7 @@ export default function TambahKelasPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isTeacher) return;
     if (!className) {
       alert("Nama kelas wajib diisi!");
       return;
@@ -102,10 +114,10 @@ export default function TambahKelasPage() {
     }
   };
 
-  if (loading) {
+  if (roleLoading || loading) {
     return (
       <div className="py-20 text-center text-slate-400 font-bold">
-        Memuat data pengajar...
+        Memuat data...
       </div>
     );
   }

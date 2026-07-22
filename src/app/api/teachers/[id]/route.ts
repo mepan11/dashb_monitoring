@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import bcrypt from "bcryptjs";
 
 export async function GET(
   request: Request,
@@ -289,6 +290,10 @@ export async function PUT(
       }
     }
 
+    // Fetch old email first
+    const [current]: any = await db.query("SELECT email FROM teachers WHERE id = ?", [id]);
+    const oldEmail = current[0]?.email;
+
     // 1. Update teacher master data
     const [result]: any = await db.query(
       `
@@ -304,6 +309,24 @@ export async function PUT(
         { success: false, message: "Guru tidak ditemukan" },
         { status: 404 }
       );
+    }
+
+    // Sync to users table
+    if (oldEmail) {
+      const [existingUser]: any = await db.query("SELECT id FROM users WHERE email = ?", [oldEmail]);
+      if (existingUser.length > 0) {
+        await db.query("UPDATE users SET email = ?, name = ? WHERE email = ?", [email, name, oldEmail]);
+      } else {
+        const [existingNew]: any = await db.query("SELECT id FROM users WHERE email = ?", [email]);
+        if (existingNew.length === 0) {
+          const salt = await bcrypt.genSalt(10);
+          const defaultHash = await bcrypt.hash("password123", salt);
+          await db.query(
+            "INSERT INTO users (name, email, role, password_hash) VALUES (?, ?, 'teacher', ?)",
+            [name, email, defaultHash]
+          );
+        }
+      }
     }
 
     // 2. Manage Homeroom assignment

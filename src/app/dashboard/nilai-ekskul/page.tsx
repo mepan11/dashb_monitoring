@@ -34,9 +34,19 @@ export default function NilaiEkskulPage() {
     async function fetchEkskuls() {
       try {
         setLoading(true);
+        const userStr = localStorage.getItem("user");
+        let coachEmailParam = "";
+        if (userStr) {
+          const u = JSON.parse(userStr);
+          if (u.role === "coach" && u.email) {
+            coachEmailParam = `&coach_email=${encodeURIComponent(u.email)}`;
+          }
+        }
+
         const url = periodId
-          ? `/api/extracurriculars?period_id=${periodId}`
-          : `/api/extracurriculars`;
+          ? `/api/extracurriculars?period_id=${periodId}${coachEmailParam}&t=${Date.now()}`
+          : `/api/extracurriculars?${coachEmailParam ? coachEmailParam.slice(1) + "&" : ""}t=${Date.now()}`;
+
         const res = await fetch(url);
         const json = await res.json();
 
@@ -67,12 +77,19 @@ export default function NilaiEkskulPage() {
 
   // Fetch period name
   useEffect(() => {
-    if (!periodId) return;
-    fetch(`/api/periods?id=${periodId}`)
+    fetch(`/api/periods?t=${Date.now()}`)
       .then((r) => r.json())
       .then((j) => {
-        if (j.success && j.data) {
-          setPeriodName(`TA ${j.data.academic_year} - ${j.data.semester}`);
+        if (j.success && Array.isArray(j.data)) {
+          let matched = null;
+          if (periodId) {
+            matched = j.data.find((p: any) => String(p.id) === String(periodId));
+          } else {
+            matched = j.data.find((p: any) => p.is_active || p.isActive);
+          }
+          if (matched) {
+            setPeriodName(`TA ${matched.academic_year || matched.academicYear} - ${matched.semester}`);
+          }
         }
       })
       .catch(() => {});

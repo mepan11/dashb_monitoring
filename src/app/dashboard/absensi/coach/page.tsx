@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
@@ -15,6 +15,7 @@ import {
   Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -46,6 +47,7 @@ function formatFromDatetimeLocal(val: string) {
 }
 
 export default function CoachAttendancePage() {
+  const { role, isReadOnly } = useRole();
   const [periodId, setPeriodId] = useState("");
   const [periodName, setPeriodName] = useState("");
   const [coaches, setCoaches] = useState<CoachRow[]>([]);
@@ -410,14 +412,16 @@ export default function CoachAttendancePage() {
             />
           </div>
 
-          <Button
-            onClick={handleSaveAttendance}
-            disabled={saving || !periodId}
-            className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm disabled:opacity-50"
-          >
-            <Save className="w-4 h-4" />
-            {saving ? "Menyimpan..." : "Simpan Presensi"}
-          </Button>
+          {!isReadOnly && (
+            <Button
+              onClick={handleSaveAttendance}
+              disabled={saving || !periodId}
+              className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {saving ? "Menyimpan..." : "Simpan Presensi"}
+            </Button>
+          )}
 
           {/* Rekap Date Range */}
           <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-500 shadow-sm">
@@ -547,7 +551,8 @@ export default function CoachAttendancePage() {
                           onChange={(e) =>
                             setCheckInTimes((prev) => ({ ...prev, [row.id]: e.target.value }))
                           }
-                          className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white transition-all text-slate-800"
+                          disabled={isReadOnly}
+                          className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white transition-all text-slate-800 disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                       </td>
 
@@ -559,7 +564,8 @@ export default function CoachAttendancePage() {
                           onChange={(e) =>
                             setCheckOutTimes((prev) => ({ ...prev, [row.id]: e.target.value }))
                           }
-                          className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white transition-all text-slate-800"
+                          disabled={isReadOnly}
+                          className="px-2 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-600 focus:bg-white transition-all text-slate-800 disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                       </td>
 
@@ -570,7 +576,8 @@ export default function CoachAttendancePage() {
                           onChange={(e) =>
                             setAttendance((prev) => ({ ...prev, [row.id]: e.target.value }))
                           }
-                          className={`text-[11px] font-bold px-3 py-1.5 rounded-full border outline-none cursor-pointer ${currentStatus === "Hadir"
+                          disabled={isReadOnly}
+                          className={`text-[11px] font-bold px-3 py-1.5 rounded-full border outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${currentStatus === "Hadir"
                               ? "bg-emerald-50 text-emerald-600 border-emerald-100"
                               : currentStatus === "Terlambat"
                                 ? "bg-amber-50 text-amber-600 border-amber-100"

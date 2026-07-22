@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import bcrypt from "bcryptjs";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     // 1. Ambil statistik
@@ -42,6 +44,7 @@ export async function GET() {
       else if (user.role === "teacher") roleLabel = "Guru";
       else if (user.role === "coach") roleLabel = "Coach";
       else if (user.role === "parent") roleLabel = "Wali Murid";
+      else if (user.role === "kepala_sekolah") roleLabel = "Kepala Sekolah";
 
       return {
         id: String(user.id),

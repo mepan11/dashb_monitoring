@@ -27,6 +27,11 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server returned non-JSON response");
+      }
+
       const data = await response.json();
 
       if (response.ok && data.success) {

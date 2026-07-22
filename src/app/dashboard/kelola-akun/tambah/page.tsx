@@ -3,10 +3,12 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { User, ChevronDown, Eye, EyeOff, Info } from "lucide-react";
+import { User, ChevronDown, Eye, EyeOff, Info, Ban } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 
 export default function RegisterNewAccountPage() {
+  const { role, loading: roleLoading } = useRole();
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -46,7 +48,7 @@ export default function RegisterNewAccountPage() {
       const result = await res.json();
       if (result.success) {
         alert("Akun baru berhasil didaftarkan!");
-        router.push("/dashboard/kelola-akun");
+        window.location.href = "/dashboard/kelola-akun";
       } else {
         setErrorMsg(result.message || "Gagal mendaftarkan akun baru");
       }
@@ -57,6 +59,17 @@ export default function RegisterNewAccountPage() {
       setLoading(false);
     }
   };
+
+  if (roleLoading) return null;
+
+  if (role === "guru" || role === "coach" || role === "kepala_sekolah") {
+    return (
+      <div className="py-20 text-center text-slate-400 font-bold">
+        <Ban className="w-12 h-12 text-rose-500 mx-auto mb-4" />
+        Anda tidak memiliki akses ke halaman ini.
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-8 max-w-4xl mx-auto">

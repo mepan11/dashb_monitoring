@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const periodId = url.searchParams.get("period_id");
+    const coachEmail = url.searchParams.get("coach_email") || "";
 
     let activePeriodId = periodId;
     if (!activePeriodId || activePeriodId === "undefined") {
@@ -27,10 +30,16 @@ export async function GET(request: Request) {
       LEFT JOIN extracurricular_coaches ec ON ep.id = ec.extracurricular_period_id
       LEFT JOIN coach_periods cp ON ec.coach_period_id = cp.id
       LEFT JOIN coaches c ON cp.coach_id = c.id
-      ORDER BY e.name ASC
     `;
 
-    const [rows]: any = await db.query(query, [activePeriodId]);
+    const queryParams: any[] = [activePeriodId];
+    if (coachEmail) {
+      query += " WHERE c.email = ?";
+      queryParams.push(coachEmail);
+    }
+    query += " ORDER BY e.name ASC";
+
+    const [rows]: any = await db.query(query, queryParams);
     return NextResponse.json({ success: true, data: rows });
   } catch (error: any) {
     console.error("Extracurriculars GET Error:", error);

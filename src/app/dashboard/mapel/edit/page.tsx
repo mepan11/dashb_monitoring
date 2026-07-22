@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { X, Calendar, Clock, Info, UserCheck, ChevronDown } from "lucide-react";
+import { useRole } from "@/lib/useRole";
 
 interface SubjectOption {
   id: number;
@@ -22,6 +23,10 @@ function EditSubjectContent() {
   const classId = searchParams.get("class_id") || "1";
   const subjectId = searchParams.get("subject_id") || "1";
 
+  const { role, isTeacher, isAdmin } = useRole();
+  const [authorized, setAuthorized] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
   const [teachers, setTeachers] = useState<TeacherOption[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState(subjectId);
@@ -38,13 +43,62 @@ function EditSubjectContent() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    async function checkAuth() {
+      const userStr = localStorage.getItem("user");
+      if (!userStr) {
+        router.push("/");
+        return;
+      }
+      const u = JSON.parse(userStr);
+      if (u.role === "admin") {
+        setAuthorized(true);
+        setCheckingAuth(false);
+        return;
+      }
+      if (u.role === "guru") {
+        try {
+          const res = await fetch(`/api/classes/${classId}/subjects?teacher_email=${encodeURIComponent(u.email)}`);
+          const json = await res.json();
+          if (json.success && json.isHomeroomClass) {
+            setAuthorized(true);
+          } else {
+            alert("Anda tidak memiliki akses untuk mengedit mata pelajaran di kelas ini!");
+            router.push("/dashboard/mapel");
+          }
+        } catch {
+          router.push("/dashboard/mapel");
+        }
+      } else {
+        router.push("/dashboard/mapel");
+      }
+      setCheckingAuth(false);
+    }
+
+    if (role) {
+      checkAuth();
+    }
+  }, [role, classId, router]);
+
+  useEffect(() => {
     async function initOptions() {
       setLoading(true);
       try {
+        const userStr = localStorage.getItem("user");
+        let emailQuery = "";
+        if (userStr) {
+          const u = JSON.parse(userStr);
+          if (u.role === "guru" && u.email) {
+            emailQuery = `?teacher_email=${encodeURIComponent(u.email)}`;
+          }
+        }
+        const separator = emailQuery ? "&" : "?";
+        const cachedPeriodId = localStorage.getItem("active_period_id") || "";
+        const periodParam = cachedPeriodId ? `${separator}period_id=${cachedPeriodId}` : "";
+
         const [subRes, teachRes, currRes] = await Promise.all([
           fetch("/api/subjects"),
           fetch("/api/teachers"),
-          fetch(`/api/classes/${classId}/subjects`),
+          fetch(`/api/classes/${classId}/subjects${emailQuery}${periodParam}`),
         ]);
         const subJson = await subRes.json();
         const teachJson = await teachRes.json();
@@ -97,8 +151,10 @@ function EditSubjectContent() {
         setLoading(false);
       }
     }
-    initOptions();
-  }, [classId, subjectId]);
+    if (authorized) {
+      initOptions();
+    }
+  }, [authorized, classId, subjectId]);
 
   const daysList = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
 
@@ -128,9 +184,17 @@ function EditSubjectContent() {
         endTime: daySchedules[day]?.endTime || "09:30"
       }));
 
+      const userStr = localStorage.getItem("user");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.role) headers["x-user-role"] = u.role;
+        if (u.email) headers["x-user-email"] = u.email;
+      }
+
       const res = await fetch(`/api/classes/${classId}/subjects`, {
         method: "POST", // POST handler handles upsert via INSERT ON DUPLICATE KEY UPDATE
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           subjectId: selectedSubjectId,
           teacherId: selectedTeacherId,
@@ -151,10 +215,10 @@ function EditSubjectContent() {
     }
   };
 
-  if (loading) {
+  if (checkingAuth || loading) {
     return (
       <div className="py-20 text-center text-slate-400 font-bold">
-        Memuat data kurikulum...
+        Memuat data...
       </div>
     );
   }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { User, Info, GraduationCap, ChevronDown, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 
 interface TeacherOption {
   id: number;
@@ -15,7 +16,8 @@ function EditKelasContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get("id") || "1";
-
+  const { role, isTeacher, loading: roleLoading } = useRole();
+  const [userEmail, setUserEmail] = useState("");
   const [className, setClassName] = useState("");
   const [homeroomTeacherId, setHomeroomTeacherId] = useState("");
   const [capacity, setCapacity] = useState(32);
@@ -25,6 +27,18 @@ function EditKelasContent() {
   const [saving, setSaving] = useState(false);
   const [periodId, setPeriodId] = useState("");
   const [periodName, setPeriodName] = useState("Memuat...");
+
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        const u = JSON.parse(userStr);
+        if (u.email) setUserEmail(u.email);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
 
   // Mendengarkan perubahan periode akademik
   useEffect(() => {
@@ -43,7 +57,7 @@ function EditKelasContent() {
 
   // Fetch data guru & periode setiap kali periodId atau ID kelas berubah
   useEffect(() => {
-    if (!periodId) return;
+    if (!periodId || roleLoading) return;
 
     async function loadData() {
       setLoading(true);
@@ -54,6 +68,13 @@ function EditKelasContent() {
 
         if (classJson.success && classJson.data) {
           const c = classJson.data;
+
+          if (role === "guru" && userEmail && c.homeroomTeacherEmail !== userEmail) {
+            alert("Anda tidak memiliki akses untuk mengedit kelas ini!");
+            router.push("/dashboard/kelas");
+            return;
+          }
+
           setClassName(c.className);
           setHomeroomTeacherId(c.homeroomTeacherId ? String(c.homeroomTeacherId) : "");
           setCapacity(c.capacity);
@@ -82,7 +103,7 @@ function EditKelasContent() {
       }
     }
     loadData();
-  }, [id, periodId]);
+  }, [id, periodId, roleLoading, role, userEmail]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,9 +113,16 @@ function EditKelasContent() {
     }
     setSaving(true);
     try {
+      const userStr = localStorage.getItem("user");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.role) headers["x-user-role"] = u.role;
+        if (u.email) headers["x-user-email"] = u.email;
+      }
       const response = await fetch(`/api/classes/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           className,
           homeroomTeacherId: homeroomTeacherId ? Number(homeroomTeacherId) : null,

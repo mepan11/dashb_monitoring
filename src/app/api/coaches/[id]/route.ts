@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import bcrypt from "bcryptjs";
 
 export async function GET(
   request: Request,
@@ -115,6 +116,10 @@ export async function PUT(
       activePeriodId = activePeriod[0]?.id || 1;
     }
 
+    // Fetch old email first
+    const [current]: any = await db.query("SELECT email FROM coaches WHERE id = ?", [id]);
+    const oldEmail = current[0]?.email;
+
     // 1. Update coach master data
     const [result]: any = await db.query(
       `
@@ -130,6 +135,24 @@ export async function PUT(
         { success: false, message: "Coach tidak ditemukan" },
         { status: 404 }
       );
+    }
+
+    // Sync to users table
+    if (oldEmail) {
+      const [existingUser]: any = await db.query("SELECT id FROM users WHERE email = ?", [oldEmail]);
+      if (existingUser.length > 0) {
+        await db.query("UPDATE users SET email = ?, name = ? WHERE email = ?", [email, name, oldEmail]);
+      } else {
+        const [existingNew]: any = await db.query("SELECT id FROM users WHERE email = ?", [email]);
+        if (existingNew.length === 0) {
+          const salt = await bcrypt.genSalt(10);
+          const defaultHash = await bcrypt.hash("password123", salt);
+          await db.query(
+            "INSERT INTO users (name, email, role, password_hash) VALUES (?, ?, 'coach', ?)",
+            [name, email, defaultHash]
+          );
+        }
+      }
     }
 
     // 2. Ensure linked to the academic period

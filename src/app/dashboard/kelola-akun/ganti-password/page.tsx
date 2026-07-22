@@ -3,10 +3,12 @@
 import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Eye, EyeOff, Info } from "lucide-react";
+import { Eye, EyeOff, Info, Ban } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 
 function ChangePasswordContent() {
+  const { role, loading: roleLoading } = useRole();
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
@@ -81,6 +83,19 @@ function ChangePasswordContent() {
       alert("Terjadi kesalahan koneksi saat mengubah kata sandi");
     }
   };
+
+  if (roleLoading) {
+    return null;
+  }
+
+  if (role === "guru" || role === "coach" || role === "kepala_sekolah") {
+    return (
+      <div className="py-20 text-center text-slate-400 font-bold">
+        <Ban className="w-12 h-12 text-rose-500 mx-auto mb-4" />
+        Anda tidak memiliki akses ke halaman ini.
+      </div>
+    );
+  }
 
   if (loading) {
     return (

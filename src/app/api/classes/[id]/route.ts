@@ -22,6 +22,7 @@ export async function GET(
       `SELECT c.id, c.class_name AS className, 
               c.capacity,
               tp.teacher_id AS homeroomTeacherId,
+              t.email AS homeroomTeacherEmail,
               ap.academic_year AS academicYear,
               ap.semester,
               clp.period_id AS periodId
@@ -29,6 +30,7 @@ export async function GET(
        JOIN class_periods clp ON c.id = clp.class_id
        JOIN academic_periods ap ON clp.period_id = ap.id
        LEFT JOIN teacher_periods tp ON clp.homeroom_teacher_id = tp.id
+       LEFT JOIN teachers t ON tp.teacher_id = t.id
        WHERE c.id = ? AND clp.period_id = ?`,
       [id, activePeriodId]
     );
@@ -57,6 +59,8 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
+    const userRole = request.headers.get("x-user-role");
+    const userEmail = request.headers.get("x-user-email");
     const { className, homeroomTeacherId, capacity, periodId } = await request.json();
 
     if (!className) {
@@ -74,6 +78,23 @@ export async function PUT(
         [id]
       );
       targetPeriodId = current[0]?.period_id || 1;
+    }
+
+    if (userRole === "guru") {
+      const [classPeriodRows]: any = await db.query(
+        `SELECT clp.id 
+         FROM class_periods clp
+         WHERE clp.class_id = ? AND clp.period_id = ? AND clp.homeroom_teacher_id = (
+           SELECT id FROM teacher_periods WHERE teacher_id = (SELECT id FROM teachers WHERE email = ? LIMIT 1) AND period_id = ? LIMIT 1
+         )`,
+        [id, targetPeriodId, userEmail, targetPeriodId]
+      );
+      if (classPeriodRows.length === 0) {
+        return NextResponse.json(
+          { success: false, message: "Akses ditolak: Anda bukan Wali Kelas untuk kelas ini" },
+          { status: 403 }
+        );
+      }
     }
 
     // 1. Update class master
@@ -128,6 +149,32 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const userRole = request.headers.get("x-user-role");
+    const userEmail = request.headers.get("x-user-email");
+
+    let activePeriodId = 1;
+    const [activePeriod]: any = await db.query(
+      "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
+    );
+    activePeriodId = activePeriod[0]?.id || 1;
+
+    if (userRole === "guru") {
+      const [classPeriodRows]: any = await db.query(
+        `SELECT clp.id 
+         FROM class_periods clp
+         WHERE clp.class_id = ? AND clp.period_id = ? AND clp.homeroom_teacher_id = (
+           SELECT id FROM teacher_periods WHERE teacher_id = (SELECT id FROM teachers WHERE email = ? LIMIT 1) AND period_id = ? LIMIT 1
+         )`,
+        [id, activePeriodId, userEmail, activePeriodId]
+      );
+      if (classPeriodRows.length === 0) {
+        return NextResponse.json(
+          { success: false, message: "Akses ditolak: Anda bukan Wali Kelas untuk kelas ini" },
+          { status: 403 }
+        );
+      }
+    }
+
     const [result]: any = await db.query("DELETE FROM classes WHERE id = ?", [id]);
 
     if (result.affectedRows === 0) {

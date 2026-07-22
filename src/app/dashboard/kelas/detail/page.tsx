@@ -19,6 +19,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useRole } from "@/lib/useRole";
 
 interface StudentRow {
   id: string;
@@ -42,6 +43,10 @@ const LIMIT = 15;
 function ClassDetailContent() {
   const searchParams = useSearchParams();
   const classId = searchParams.get("id") || "1";
+
+  const { role, isAdmin, isTeacher } = useRole();
+  const [isHomeroom, setIsHomeroom] = useState(false);
+  const canCRUD = isAdmin || (isTeacher && isHomeroom);
 
   const [className, setClassName] = useState("Kelas ...");
   const [homeroomTeacher, setHomeroomTeacher] = useState("Memuat...");
@@ -87,13 +92,22 @@ function ClassDetailContent() {
     if (!periodId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/classes/${classId}/students?period_id=${periodId}`);
+      const userStr = localStorage.getItem("user");
+      let teacherEmailParam = "";
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.role === "guru" && u.email) {
+          teacherEmailParam = `&teacher_email=${encodeURIComponent(u.email)}`;
+        }
+      }
+      const res = await fetch(`/api/classes/${classId}/students?period_id=${periodId}${teacherEmailParam}`);
       const json = await res.json();
       if (json.success) {
         setClassName(json.className);
         setHomeroomTeacher(json.homeroomTeacher);
         setStudents(json.data);
         setTotalStats(json.stats);
+        setIsHomeroom(!!json.isHomeroom);
       }
     } catch (err) {
       console.error("Failed to fetch class students:", err);
@@ -129,8 +143,16 @@ function ClassDetailContent() {
   const handleDeleteStudent = async (studentId: string, name: string) => {
     if (!confirm(`Keluarkan siswa "${name}" dari kelas ${className}?`)) return;
     try {
+      const userStr = localStorage.getItem("user");
+      const headers: Record<string, string> = {};
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.role) headers["x-user-role"] = u.role;
+        if (u.email) headers["x-user-email"] = u.email;
+      }
       const res = await fetch(`/api/classes/${classId}/students?studentId=${studentId}&period_id=${periodId}`, {
         method: "DELETE",
+        headers,
       });
       const json = await res.json();
       if (json.success) {
@@ -176,9 +198,16 @@ function ClassDetailContent() {
     }
     setSubmittingAvailable(true);
     try {
+      const userStr = localStorage.getItem("user");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.role) headers["x-user-role"] = u.role;
+        if (u.email) headers["x-user-email"] = u.email;
+      }
       const res = await fetch(`/api/classes/${classId}/students`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ studentId: selectedStudentId, periodId }),
       });
       const json = await res.json();
@@ -196,6 +225,41 @@ function ClassDetailContent() {
     } finally {
       setSubmittingAvailable(false);
     }
+  };
+
+  const handleExportCSV = () => {
+    if (students.length === 0) {
+      alert("Tidak ada data siswa untuk diexport.");
+      return;
+    }
+
+    const headers = ["Nama Siswa", "No. Absen", "NISN", "Gender", "Status"];
+    const rows = students.map((s) => [
+      s.name,
+      s.absenNumber,
+      s.nisn,
+      s.gender,
+      s.status
+    ]);
+
+    const csvContent = "\uFEFF" + [
+      headers.join(","),
+      ...rows.map((row) => row.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    
+    const sanitizedClassName = className.replace(/[^a-zA-Z0-9-_]/g, "_");
+    const filename = `Daftar_Siswa_${sanitizedClassName}.csv`;
+    
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const stats = [
@@ -250,17 +314,23 @@ function ClassDetailContent() {
 
         {/* Top actions */}
         <div className="flex items-center gap-3 self-stretch xl:self-auto">
-          <Button variant="secondary" className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm">
+          <Button
+            onClick={handleExportCSV}
+            variant="secondary"
+            className="!w-auto !py-2.5 !px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm"
+          >
             <Download className="w-4 h-4 text-slate-400" />
             Export Data
           </Button>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="!w-auto py-2.5 px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]"
-          >
-            <UserPlus className="w-4 h-4" />
-            Tambah Siswa
-          </button>
+          {canCRUD && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="!w-auto py-2.5 px-5 flex items-center gap-2 rounded-lg font-bold text-xs bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]"
+            >
+              <UserPlus className="w-4 h-4" />
+              Tambah Siswa
+            </button>
+          )}
         </div>
       </div>
 
@@ -411,15 +481,19 @@ function ClassDetailContent() {
                         <Link href={`/dashboard/siswa/profile?id=${student.id}`} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition-all">
                           <Eye className="w-4 h-4" />
                         </Link>
-                        <Link href={`/dashboard/siswa/edit?id=${student.id}`} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all">
-                          <Pencil className="w-4 h-4" />
-                        </Link>
-                        <button
-                          onClick={() => handleDeleteStudent(student.id, student.name)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canCRUD && (
+                          <>
+                            <Link href={`/dashboard/siswa/edit?id=${student.id}`} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-all">
+                              <Pencil className="w-4 h-4" />
+                            </Link>
+                            <button
+                              onClick={() => handleDeleteStudent(student.id, student.name)}
+                              className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
 

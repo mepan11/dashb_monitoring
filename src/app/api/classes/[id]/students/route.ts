@@ -20,7 +20,7 @@ export async function GET(
 
     // Get class_period info
     const [classPeriodRows]: any = await db.query(
-      `SELECT clp.id AS class_period_id, c.class_name AS className, t.name AS homeroomTeacher
+      `SELECT clp.id AS class_period_id, clp.homeroom_teacher_id, c.class_name AS className, t.name AS homeroomTeacher
        FROM class_periods clp
        JOIN classes c ON clp.class_id = c.id
        LEFT JOIN teacher_periods tp ON clp.homeroom_teacher_id = tp.id
@@ -35,6 +35,19 @@ export async function GET(
         { success: false, message: "Kelas tidak ditemukan untuk periode akademik ini" },
         { status: 404 }
       );
+    }
+
+    const teacherEmail = url.searchParams.get("teacher_email");
+    let isHomeroom = false;
+    if (teacherEmail && cls) {
+      const [tRows]: any = await db.query(
+        "SELECT id FROM teacher_periods WHERE teacher_id = (SELECT id FROM teachers WHERE email = ? LIMIT 1) AND period_id = ? LIMIT 1",
+        [teacherEmail, activePeriodId]
+      );
+      const teacherPeriodId = tRows[0]?.id;
+      if (teacherPeriodId && cls.homeroom_teacher_id === teacherPeriodId) {
+        isHomeroom = true;
+      }
     }
 
     // Get students belonging to this class period
@@ -72,6 +85,7 @@ export async function GET(
       success: true,
       className: cls.className,
       homeroomTeacher: cls.homeroomTeacher || "Belum ditentukan",
+      isHomeroom,
       stats: { total, male, female },
       data: students,
     });
@@ -90,6 +104,8 @@ export async function POST(
 ) {
   try {
     const { id } = await params; // class_id
+    const userRole = request.headers.get("x-user-role");
+    const userEmail = request.headers.get("x-user-email");
     const { studentId, periodId } = await request.json();
 
     if (!studentId) {
@@ -105,6 +121,23 @@ export async function POST(
         "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
       );
       activePeriodId = activePeriod[0]?.id || 1;
+    }
+
+    if (userRole === "guru") {
+      const [classPeriodRows]: any = await db.query(
+        `SELECT clp.id 
+         FROM class_periods clp
+         WHERE clp.class_id = ? AND clp.period_id = ? AND clp.homeroom_teacher_id = (
+           SELECT id FROM teacher_periods WHERE teacher_id = (SELECT id FROM teachers WHERE email = ? LIMIT 1) AND period_id = ? LIMIT 1
+         )`,
+        [id, activePeriodId, userEmail, activePeriodId]
+      );
+      if (classPeriodRows.length === 0) {
+        return NextResponse.json(
+          { success: false, message: "Akses ditolak: Anda bukan Wali Kelas untuk kelas ini" },
+          { status: 403 }
+        );
+      }
     }
 
     // Resolve class_period_id
@@ -190,6 +223,26 @@ export async function DELETE(
         "SELECT id FROM academic_periods WHERE is_active = TRUE LIMIT 1"
       );
       activePeriodId = activePeriod[0]?.id || 1;
+    }
+
+    const userRole = request.headers.get("x-user-role");
+    const userEmail = request.headers.get("x-user-email");
+
+    if (userRole === "guru") {
+      const [classPeriodRows]: any = await db.query(
+        `SELECT clp.id 
+         FROM class_periods clp
+         WHERE clp.class_id = ? AND clp.period_id = ? AND clp.homeroom_teacher_id = (
+           SELECT id FROM teacher_periods WHERE teacher_id = (SELECT id FROM teachers WHERE email = ? LIMIT 1) AND period_id = ? LIMIT 1
+         )`,
+        [id, activePeriodId, userEmail, activePeriodId]
+      );
+      if (classPeriodRows.length === 0) {
+        return NextResponse.json(
+          { success: false, message: "Akses ditolak: Anda bukan Wali Kelas untuk kelas ini" },
+          { status: 403 }
+        );
+      }
     }
 
     // Set class_period_id to NULL for this student period

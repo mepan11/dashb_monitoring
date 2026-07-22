@@ -37,7 +37,7 @@ interface CoachOption {
 }
 
 export default function EkstrakurikulerPage() {
-  const { isReadOnly } = useRole();
+  const { isAdmin } = useRole();
   const [selectedFilter, setSelectedFilter] = useState("Semua");
   const [programs, setPrograms] = useState<ProgramItem[]>([]);
   const [coaches, setCoaches] = useState<CoachOption[]>([]);
@@ -48,14 +48,14 @@ export default function EkstrakurikulerPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [selectedId, setSelectedId] = useState("");
-  
+
   const [ekskulName, setEkskulName] = useState("");
   const [ekskulCategory, setEkskulCategory] = useState("Seni");
   const [ekskulCoachId, setEkskulCoachId] = useState("");
   const [ekskulSchedule, setEkskulSchedule] = useState("");
   const [ekskulLocation, setEkskulLocation] = useState("");
   const [ekskulContact, setEkskulContact] = useState("");
-  
+
   const [saving, setSaving] = useState(false);
 
   const filters = ["Semua", "Olahraga", "Seni & Sains"];
@@ -235,7 +235,7 @@ export default function EkstrakurikulerPage() {
         <div>
           <h1 className="text-3xl font-extrabold text-[#1e293b]">Katalog Ekstrakurikuler</h1>
           <p className="text-sm text-slate-400 mt-1">
-            Temukan dan kelola program minat bakat siswa SD Islam Baiturrachman untuk periode akademik 2025/2026.
+            Temukan dan kelola program minat bakat siswa SD Islam Baiturrachman.
           </p>
         </div>
 
@@ -247,11 +247,10 @@ export default function EkstrakurikulerPage() {
               <button
                 key={f}
                 onClick={() => setSelectedFilter(f)}
-                className={`flex-1 md:flex-initial px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                  isActive
+                className={`flex-1 md:flex-initial px-4 py-2 rounded-lg text-xs font-bold transition-all ${isActive
                     ? "bg-[#2563eb] text-white shadow-sm"
                     : "text-slate-500 hover:text-slate-800"
-                }`}
+                  }`}
               >
                 {f}
               </button>
@@ -283,20 +282,19 @@ export default function EkstrakurikulerPage() {
               >
                 {/* Card Top: Icon & Category & Action Delete */}
                 <div className="flex justify-between items-center">
-                  <div className={`p-3 rounded-xl border border-slate-100/30 shadow-sm ${
-                    prog.category === "Olahraga"
+                  <div className={`p-3 rounded-xl border border-slate-100/30 shadow-sm ${prog.category === "Olahraga"
                       ? "bg-blue-50 text-blue-600"
                       : prog.category === "Seni"
-                      ? "bg-amber-50 text-amber-600"
-                      : "bg-emerald-50 text-emerald-600"
-                  }`}>
+                        ? "bg-amber-50 text-amber-600"
+                        : "bg-emerald-50 text-emerald-600"
+                    }`}>
                     <ProgramIcon className="w-5 h-5" />
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-md ${getCategoryBadgeStyles(prog.category)}`}>
                       {prog.category}
                     </span>
-                    {!isReadOnly && (
+                    {isAdmin && (
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
                         <button
                           onClick={() => handleOpenEditModal(prog)}
@@ -353,7 +351,7 @@ export default function EkstrakurikulerPage() {
         )}
 
         {/* Add Program Dotted Card */}
-        {!isReadOnly && (
+        {isAdmin && (
           <div
             onClick={handleOpenAddModal}
             className="bg-[#f4f7fc]/50 border-2 border-dashed border-slate-200/80 rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-4 cursor-pointer hover:bg-[#2563eb]/5 hover:border-blue-300 transition-all min-h-[220px]"

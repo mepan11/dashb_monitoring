@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { X, Calendar, Clock, Info, UserCheck, ChevronDown } from "lucide-react";
+import { useRole } from "@/lib/useRole";
 
 interface SubjectOption {
   id: number;
@@ -21,6 +22,10 @@ function AddSubjectContent() {
   const searchParams = useSearchParams();
   const classId = searchParams.get("class_id") || "1";
 
+  const { role, isTeacher, isAdmin } = useRole();
+  const [authorized, setAuthorized] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
   const [teachers, setTeachers] = useState<TeacherOption[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState("");
@@ -35,6 +40,43 @@ function AddSubjectContent() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    async function checkAuth() {
+      const userStr = localStorage.getItem("user");
+      if (!userStr) {
+        router.push("/");
+        return;
+      }
+      const u = JSON.parse(userStr);
+      if (u.role === "admin") {
+        setAuthorized(true);
+        setCheckingAuth(false);
+        return;
+      }
+      if (u.role === "guru") {
+        try {
+          const res = await fetch(`/api/classes/${classId}/subjects?teacher_email=${encodeURIComponent(u.email)}`);
+          const json = await res.json();
+          if (json.success && json.isHomeroomClass) {
+            setAuthorized(true);
+          } else {
+            alert("Anda tidak memiliki akses untuk menambahkan mata pelajaran di kelas ini!");
+            router.push("/dashboard/mapel");
+          }
+        } catch {
+          router.push("/dashboard/mapel");
+        }
+      } else {
+        router.push("/dashboard/mapel");
+      }
+      setCheckingAuth(false);
+    }
+
+    if (role) {
+      checkAuth();
+    }
+  }, [role, classId, router]);
 
   useEffect(() => {
     async function initOptions() {
@@ -54,8 +96,10 @@ function AddSubjectContent() {
         setLoading(false);
       }
     }
-    initOptions();
-  }, []);
+    if (authorized) {
+      initOptions();
+    }
+  }, [authorized]);
 
   const daysList = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
 
@@ -85,9 +129,17 @@ function AddSubjectContent() {
         endTime: daySchedules[day]?.endTime || "09:30"
       }));
 
+      const userStr = localStorage.getItem("user");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.role) headers["x-user-role"] = u.role;
+        if (u.email) headers["x-user-email"] = u.email;
+      }
+
       const res = await fetch(`/api/classes/${classId}/subjects`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           subjectId: selectedSubjectId,
           teacherId: selectedTeacherId,
@@ -108,10 +160,10 @@ function AddSubjectContent() {
     }
   };
 
-  if (loading) {
+  if (checkingAuth || loading) {
     return (
       <div className="py-20 text-center text-slate-400 font-bold">
-        Memuat pilihan kurikulum...
+        Memuat data...
       </div>
     );
   }

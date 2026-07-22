@@ -66,6 +66,7 @@ export const Sidebar: React.FC = () => {
           ["Dashboard", "Ekstrakurikuler", "Absensi", "Nilai Ekstrakurikuler", "Periode Akademik"].includes(item.name)
         );
       case "kepala_sekolah":
+        return menuItems.filter(item => item.name !== "Kelola Akun");
       case "admin":
       default:
         return menuItems;
